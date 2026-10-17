@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-parchment text-ink antialiased;
+  background-image:
+    radial-gradient(1200px 500px at 10% -10%, rgba(198, 163, 90, 0.12), transparent 50%),
+    radial-gradient(900px 400px at 100% 0%, rgba(22, 85, 76, 0.08), transparent 45%);
+}
+
+.table-grid {
+  @apply w-full text-left text-sm;
+}
+
+.table-grid th {
+  @apply px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-pine-700/70;
+}
+
+.table-grid td {
+  @apply border-t border-pine-900/10 px-3 py-2.5 align-middle;
+}
+
+input,
+select,
+textarea {
+  @apply w-full rounded-lg border border-pine-900/15 bg-white px-3 py-2 text-sm outline-none ring-brass/40 transition focus:ring-2;
+}
+
+label {
+  @apply mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-pine-700/80;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition;
+}
+
+.btn-primary {
+  @apply bg-pine-800 text-parchment hover:bg-pine-700;
+}
+
+.btn-ghost {
+  @apply border border-pine-900/15 bg-white hover:bg-sage-100;
+}

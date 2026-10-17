@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(cuid())
+  email          String          @unique
+  name           String
+  passwordHash   String
+  role           String          @default("CASHIER")
+  active         Boolean         @default(true)
+  lastLoginAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  sales          Sale[]
+  stockTakes     StockTake[]
+  auditLogs      AuditLog[]
+  prescriptions  Prescription[]
+  purchaseOrders PurchaseOrder[]
+}
+
+model Patient {
+  id            String          @id @default(cuid())
+  firstName     String
+  lastName      String
+  dateOfBirth   DateTime?
+  gender        String?
+  phone         String?
+  email         String?
+  address       String?
+  allergies     String?
+  insurance     String?
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  prescriptions Prescription[]
+  sales         Sale[]
+}
+
+model Supplier {
+  id             String          @id @default(cuid())
+  name           String
+  contact        String?
+  phone          String?
+  email          String?
+  address        String?
+  createdAt      DateTime        @default(now())
+  products       Product[]
+  purchaseOrders PurchaseOrder[]
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  products Product[]
+}
+
+model Product {
+  id                String              @id @default(cuid())
+  sku               String              @unique
+  barcode           String?
+  name              String
+  genericName       String?
+  form              String?
+  strength          String?
+  manufacturer      String?
+  categoryId        String?
+  category          Category?           @relation(fields: [categoryId], references: [id])
+  supplierId        String?
+  supplier          Supplier?           @relation(fields: [supplierId], references: [id])
+  unit              String              @default("pack")
+  sellingPrice      Float
+  costPrice         Float
+  reorderLevel      Int                 @default(20)
+  reorderQty        Int                 @default(50)
+  requiresRx        Boolean             @default(false)
+  controlled        Boolean             @default(false)
+  taxRate           Float               @default(0)
+  active            Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  batches           Batch[]
+  saleItems         SaleItem[]
+  purchaseItems     PurchaseOrderItem[]
+  stockTakeItems    StockTakeItem[]
+  prescriptionItems PrescriptionItem[]
+}
+
+model Batch {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  lotNumber  String
+  expiryDate DateTime
+  quantity   Int
+  receivedAt DateTime @default(now())
+}
+
+model PurchaseOrder {
+  id         String              @id @default(cuid())
+  reference  String              @unique
+  supplierId String
+  supplier   Supplier            @relation(fields: [supplierId], references: [id])
+  createdById String
+  createdBy  User                @relation(fields: [createdById], references: [id])
+  status     String              @default("DRAFT")
+  notes      String?
+  createdAt  DateTime            @default(now())
+  receivedAt DateTime?
+  items      PurchaseOrderItem[]
+}
+
+model PurchaseOrderItem {
+  id        String        @id @default(cuid())
+  orderId   String
+  order     PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product       @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitCost  Float
+}
+
+model Prescription {
+  id           String              @id @default(cuid())
+  rxNumber     String              @unique
+  patientId    String
+  patient      Patient             @relation(fields: [patientId], references: [id])
+  pharmacistId String?
+  pharmacist   User?               @relation(fields: [pharmacistId], references: [id])
+  prescriber   String
+  clinic       String?
+  status       String              @default("PENDING")
+  notes        String?
+  createdAt    DateTime            @default(now())
+  dispensedAt  DateTime?
+  items        PrescriptionItem[]
+}
+
+model PrescriptionItem {
+  id             String       @id @default(cuid())
+  prescriptionId String
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product      @relation(fields: [productId], references: [id])
+  quantity       Int
+  dosage         String?
+  instructions   String?
+}
+
+model Sale {
+  id        String     @id @default(cuid())
+  invoiceNo String     @unique
+  cashierId String
+  cashier   User       @relation(fields: [cashierId], references: [id])
+  patientId String?
+  patient   Patient?   @relation(fields: [patientId], references: [id])
+  subtotal  Float
+  tax       Float
+  discount  Float      @default(0)
+  total     Float
+  payment   String     @default("CASH")
+  createdAt DateTime   @default(now())
+  items     SaleItem[]
+}
+
+model SaleItem {
+  id        String  @id @default(cuid())
+  saleId    String
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Float
+  total     Float
+}
+
+model StockTake {
+  id          String          @id @default(cuid())
+  reference   String          @unique
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  status      String          @default("IN_PROGRESS")
+  notes       String?
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+  items       StockTakeItem[]
+}
+
+model StockTakeItem {
+  id          String    @id @default(cuid())
+  stockTakeId String
+  stockTake   StockTake @relation(fields: [stockTakeId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  systemQty   Int
+  countedQty  Int
+  variance    Int
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  createdAt DateTime @default(now())
+}
+
+model Pharmacy {
+  id       String  @id @default("main")
+  name     String
+  license  String?
+  phone    String?
+  email    String?
+  address  String?
+  currency String  @default("USD")
+}
