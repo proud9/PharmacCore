@@ -16,6 +16,12 @@ export function StockTakeDesk({
   );
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
+  const [query, setQuery] = useState("");
+  const visible = rows.filter(
+    (row) =>
+      !query.trim() ||
+      `${row.name} ${row.sku}`.toLowerCase().includes(query.trim().toLowerCase()),
+  );
 
   async function submit() {
     setMessage("");
@@ -36,15 +42,21 @@ export function StockTakeDesk({
       setMessage(data.error ?? "Could not post stock take");
       return;
     }
-    setMessage(`Posted ${data.reference}`);
+    setMessage(`Count saved: ${data.reference}`);
     router.refresh();
   }
 
   return (
     <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
-      <div className="mb-4">
-        <label>Count notes</label>
-        <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="End-of-month floor count" />
+      <div className="mb-4 grid gap-3 md:grid-cols-2">
+        <div>
+          <label>Notes</label>
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Month-end count" />
+        </div>
+        <div>
+          <label>Search products</label>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name or code" />
+        </div>
       </div>
       <table className="table-grid">
         <thead>
@@ -56,7 +68,7 @@ export function StockTakeDesk({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => {
+          {visible.map((row) => {
             const counted = Number(row.counted || 0);
             const variance = counted - row.systemQty;
             return (
@@ -74,7 +86,7 @@ export function StockTakeDesk({
                     value={row.counted}
                     onChange={(e) =>
                       setRows((current) =>
-                        current.map((item, i) => (i === index ? { ...item, counted: e.target.value } : item)),
+                        current.map((item) => (item.id === row.id ? { ...item, counted: e.target.value } : item)),
                       )
                     }
                   />
@@ -87,7 +99,7 @@ export function StockTakeDesk({
       </table>
       {message ? <p className="mt-3 text-sm">{message}</p> : null}
       <button className="btn btn-primary mt-4" onClick={submit}>
-        Complete count and adjust stock
+        Finish count and update stock
       </button>
     </section>
   );

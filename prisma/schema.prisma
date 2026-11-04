@@ -8,20 +8,24 @@ datasource db {
 }
 
 model User {
-  id             String          @id @default(cuid())
-  email          String          @unique
-  name           String
-  passwordHash   String
-  role           String          @default("CASHIER")
-  active         Boolean         @default(true)
-  lastLoginAt    DateTime?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  sales          Sale[]
-  stockTakes     StockTake[]
-  auditLogs      AuditLog[]
-  prescriptions  Prescription[]
-  purchaseOrders PurchaseOrder[]
+  id               String          @id @default(cuid())
+  email            String          @unique
+  name             String
+  passwordHash     String
+  role             String          @default("CASHIER")
+  active           Boolean         @default(true)
+  lastLoginAt      DateTime?
+  institutionId    String?
+  institution      Institution?    @relation(fields: [institutionId], references: [id])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  sales            Sale[]
+  stockTakes       StockTake[]
+  auditLogs        AuditLog[]
+  prescriptions    Prescription[]
+  purchaseOrders   PurchaseOrder[]
+  consignments     Consignment[]   @relation("RequestedBy")
+  quotedOrders     Consignment[]   @relation("QuotedBy")
 }
 
 model Patient {
@@ -81,6 +85,8 @@ model Product {
   requiresRx        Boolean             @default(false)
   controlled        Boolean             @default(false)
   taxRate           Float               @default(0)
+  kind              String              @default("MEDICINE")
+  wholesalePrice    Float?
   active            Boolean             @default(true)
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
@@ -89,6 +95,7 @@ model Product {
   purchaseItems     PurchaseOrderItem[]
   stockTakeItems    StockTakeItem[]
   prescriptionItems PrescriptionItem[]
+  consignmentItems  ConsignmentItem[]
 }
 
 model Batch {
@@ -220,5 +227,62 @@ model Pharmacy {
   phone    String?
   email    String?
   address  String?
-  currency String  @default("USD")
+  currency String  @default("ZMW")
+}
+
+model Institution {
+  id        String         @id @default(cuid())
+  name      String
+  kind      String
+  license   String?
+  contact   String?
+  phone     String?
+  email     String?
+  address   String?
+  active    Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  users     User[]
+  orders    Consignment[]
+}
+
+model Consignment {
+  id              String             @id @default(cuid())
+  reference       String             @unique
+  institutionId   String
+  institution     Institution        @relation(fields: [institutionId], references: [id])
+  requestedById   String
+  requestedBy     User               @relation("RequestedBy", fields: [requestedById], references: [id])
+  quotedById      String?
+  quotedBy        User?              @relation("QuotedBy", fields: [quotedById], references: [id])
+  status          String             @default("REQUESTED")
+  notes           String?
+  adminMessage    String?
+  quotedAmount    Float?
+  readyOn         DateTime?
+  deliveryAddress String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  quotedAt        DateTime?
+  items           ConsignmentItem[]
+  events          ConsignmentEvent[]
+}
+
+model ConsignmentItem {
+  id            String       @id @default(cuid())
+  consignmentId String
+  consignment   Consignment  @relation(fields: [consignmentId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product      @relation(fields: [productId], references: [id])
+  quantity      Int
+  notes         String?
+}
+
+model ConsignmentEvent {
+  id            String      @id @default(cuid())
+  consignmentId String
+  consignment   Consignment @relation(fields: [consignmentId], references: [id], onDelete: Cascade)
+  status        String
+  message       String?
+  actorName     String?
+  createdAt     DateTime    @default(now())
 }

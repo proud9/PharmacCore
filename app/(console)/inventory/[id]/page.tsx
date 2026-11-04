@@ -29,8 +29,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       />
       <div className="mb-6 flex flex-wrap gap-2">
         {product.requiresRx ? <Badge tone="brass">Prescription</Badge> : <Badge>OTC</Badge>}
-        {qty <= product.reorderLevel ? <Badge tone="warn">Below reorder</Badge> : <Badge tone="good">Healthy stock</Badge>}
-        <Badge>{product.category?.name ?? "Uncategorised"}</Badge>
+        {qty <= product.reorderLevel ? <Badge tone="warn">Needs reorder</Badge> : <Badge tone="good">In stock</Badge>}
+        <Badge>{product.category?.name ?? "No category"}</Badge>
       </div>
       <div className="grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
         <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">

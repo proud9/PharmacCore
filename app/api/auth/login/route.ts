@@ -33,10 +33,11 @@ export async function POST(request: Request) {
     email: user.email,
     name: user.name,
     role: user.role as Role,
+    institutionId: user.institutionId,
   });
   await setSessionCookie(token);
   await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   await audit({ userId: user.id, action: "LOGIN", entity: "User", entityId: user.id });
 
-  return NextResponse.json({ ok: true, role: user.role });
+  return NextResponse.json({ ok: true, role: user.role, home: user.role === "BUYER" ? "/portal" : user.role === "WHOLESALE_ADMIN" ? "/wholesale" : "/dashboard" });
 }

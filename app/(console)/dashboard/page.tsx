@@ -21,7 +21,7 @@ export default async function DashboardPage() {
     db.pharmacy.findUnique({ where: { id: "main" } }),
   ]);
 
-  const currency = pharmacy?.currency ?? "USD";
+  const currency = pharmacy?.currency ?? "ZMW";
   const todaySales = sales.filter((sale) => sale.createdAt >= today);
   const todayRevenue = todaySales.reduce((sum, sale) => sum + sale.total, 0);
   const windowSales = sales.reduce((sum, sale) => sum + sale.total, 0);
@@ -43,29 +43,28 @@ export default async function DashboardPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Operations"
-        title="Command board"
-        description="Live view of counter trade, stock risk, and unfinished clinical work."
+        title="Home"
+        description="Today’s sales, items running low, and medicines close to expiry."
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Today's revenue" value={money(todayRevenue, currency)} hint={`${todaySales.length} invoices`} />
-        <StatCard label="14-day trade" value={money(windowSales, currency)} hint="Gross sales" />
-        <StatCard label="Low stock SKUs" value={String(low.length)} hint="At or below reorder point" />
+        <StatCard label="Last 14 days" value={money(windowSales, currency)} hint="Total sales" />
+        <StatCard label="Low stock items" value={String(low.length)} hint="Need to reorder" />
         <StatCard label="Open prescriptions" value={String(pendingRx)} hint={`${patients} patient records`} />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
         <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
-          <h2 className="font-display text-xl text-pine-900">Revenue trend</h2>
-          <p className="mb-4 text-sm text-ink/60">Last fourteen days, all tenders</p>
+          <h2 className="font-display text-xl text-pine-900">Sales this fortnight</h2>
+          <p className="mb-4 text-sm text-ink/60">Daily totals for the last 14 days</p>
           <SalesChart data={chart} />
         </section>
         <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
-          <h2 className="font-display text-xl text-pine-900">Expiry watch</h2>
-          <p className="mb-4 text-sm text-ink/60">Lots dating within 90 days</p>
+          <h2 className="font-display text-xl text-pine-900">Expiring soon</h2>
+          <p className="mb-4 text-sm text-ink/60">Stock that expires within 90 days</p>
           <div className="space-y-3">
             {expiring.length === 0 ? (
-              <p className="text-sm text-ink/60">No near-expiry lots.</p>
+              <p className="text-sm text-ink/60">Nothing due to expire in the next 90 days.</p>
             ) : (
               expiring.slice(0, 8).map((row) => (
                 <div key={`${row.product}-${row.lot}`} className="flex items-center justify-between gap-3 text-sm">
@@ -84,7 +83,7 @@ export default async function DashboardPage() {
       </div>
 
       <section className="mt-6 rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
-        <h2 className="mb-3 font-display text-xl text-pine-900">Reorder queue</h2>
+        <h2 className="mb-3 font-display text-xl text-pine-900">Items to reorder</h2>
         <table className="table-grid">
           <thead>
             <tr>

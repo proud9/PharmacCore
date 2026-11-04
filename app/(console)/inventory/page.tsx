@@ -5,6 +5,7 @@ import { Badge } from "@/components/Badge";
 import { money, stockOf } from "@/lib/utils";
 import { ProductForm } from "@/components/forms/ProductForm";
 import { canAdjustStock, requireUser } from "@/lib/auth";
+import { SearchScope } from "@/components/search/SearchScope";
 
 export default async function InventoryPage() {
   const user = await requireUser();
@@ -17,17 +18,14 @@ export default async function InventoryPage() {
     db.supplier.findMany({ orderBy: { name: "asc" } }),
     db.pharmacy.findUnique({ where: { id: "main" } }),
   ]);
-  const currency = pharmacy?.currency ?? "USD";
+  const currency = pharmacy?.currency ?? "ZMW";
 
   return (
     <div>
-      <PageHeader
-        eyebrow="Catalogue & lots"
-        title="Inventory"
-        description="SKU master, on-hand quantities by FEFO lots, and reorder posture."
-      />
+      <PageHeader title="Inventory" description="Medicines and equipment in stock, with selling price and reorder status." />
       <div className="grid gap-6 xl:grid-cols-[1.6fr_0.9fr]">
-        <section className="overflow-hidden rounded-2xl border border-pine-900/10 bg-white shadow-panel">
+        <section className="overflow-hidden rounded-2xl border border-pine-900/10 bg-white p-4 shadow-panel">
+          <SearchScope placeholder="Search by name, code, or category">
           <table className="table-grid">
             <thead>
               <tr>
@@ -41,7 +39,10 @@ export default async function InventoryPage() {
               {products.map((product) => {
                 const qty = stockOf(product.batches);
                 return (
-                  <tr key={product.id}>
+                  <tr
+                    key={product.id}
+                    data-search={`${product.name} ${product.sku} ${product.genericName ?? ""} ${product.category?.name ?? ""} ${product.barcode ?? ""}`.toLowerCase()}
+                  >
                     <td>
                       <Link href={`/inventory/${product.id}`} className="font-medium hover:underline">
                         {product.name}
@@ -63,6 +64,7 @@ export default async function InventoryPage() {
               })}
             </tbody>
           </table>
+          </SearchScope>
         </section>
         {user && canAdjustStock(user.role) ? (
           <ProductForm
@@ -70,7 +72,7 @@ export default async function InventoryPage() {
             suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
           />
         ) : (
-          <p className="text-sm text-ink/60">Inventory officers and pharmacists can add SKUs.</p>
+          <p className="text-sm text-ink/60">Only inventory officers and pharmacists can add products.</p>
         )}
       </div>
     </div>

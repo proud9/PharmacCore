@@ -9,7 +9,8 @@ export function StaffForm() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     const response = await fetch("/api/staff", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -25,13 +26,13 @@ export function StaffForm() {
       setError(data.error ?? "Could not create staff");
       return;
     }
-    event.currentTarget.reset();
+    formEl.reset();
     router.refresh();
   }
 
   return (
     <form onSubmit={onSubmit} className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
-      <h2 className="font-display text-xl text-pine-900">Issue login</h2>
+      <h2 className="font-display text-xl text-pine-900">Add staff member</h2>
       <div className="mt-4 grid gap-3">
         <div>
           <label>Full name</label>
@@ -42,13 +43,14 @@ export function StaffForm() {
           <input name="email" type="email" required />
         </div>
         <div>
-          <label>Temporary password</label>
+          <label>Password</label>
           <input name="password" type="password" minLength={8} required />
         </div>
         <div>
           <label>Role</label>
           <select name="role" defaultValue="CASHIER">
             <option value="ADMIN">Administrator</option>
+            <option value="WHOLESALE_ADMIN">Wholesale administrator</option>
             <option value="PHARMACIST">Pharmacist</option>
             <option value="TECHNICIAN">Technician</option>
             <option value="CASHIER">Cashier</option>

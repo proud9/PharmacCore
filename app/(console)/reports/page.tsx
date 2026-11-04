@@ -7,7 +7,7 @@ import { MixChart } from "@/components/MixChart";
 
 export default async function ReportsPage() {
   const pharmacy = await db.pharmacy.findUnique({ where: { id: "main" } });
-  const currency = pharmacy?.currency ?? "USD";
+  const currency = pharmacy?.currency ?? "ZMW";
   const since = subDays(startOfDay(new Date()), 30);
   const [sales, products] = await Promise.all([
     db.sale.findMany({
@@ -45,18 +45,17 @@ export default async function ReportsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Decision support"
-        title="Statistics"
-        description="Thirty-day commercial snapshot: margin, mix, tender split, and inventory capital."
+        title="Reports"
+        description="Sales, estimated cost, profit margin, and the value of stock on hand for the last 30 days."
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Revenue (30d)" value={money(revenue, currency)} hint={`${sales.length} invoices`} />
-        <StatCard label="Estimated COGS" value={money(cogs, currency)} hint="From current cost prices" />
+        <StatCard label="Estimated cost of goods" value={money(cogs, currency)} hint="Using current cost prices" />
         <StatCard
           label="Gross margin"
           value={revenue ? `${(((revenue - cogs) / revenue) * 100).toFixed(1)}%` : "—"}
         />
-        <StatCard label="Stock at cost" value={money(stockValue, currency)} hint="All lots on hand" />
+        <StatCard label="Stock value" value={money(stockValue, currency)} hint="At cost price" />
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
@@ -64,7 +63,7 @@ export default async function ReportsPage() {
           <MixChart data={mixData} />
         </section>
         <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
-          <h2 className="mb-4 font-display text-xl text-pine-900">Tender mix</h2>
+          <h2 className="mb-4 font-display text-xl text-pine-900">How customers paid</h2>
           <table className="table-grid">
             <thead>
               <tr>

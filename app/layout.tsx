@@ -13,8 +13,8 @@ const sans = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "PharmaCore — Pharmacy operations",
-  description: "Commercial pharmacy records, inventory, dispensing, and analytics.",
+  title: "Pharmacy",
+  description: "Pharmacy stock, sales, records, and wholesale orders.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -5,6 +5,7 @@ import { Badge } from "@/components/Badge";
 import { ReceivePoButton } from "@/components/forms/ReceivePoButton";
 import { canAdjustStock, requireUser } from "@/lib/auth";
 import { money } from "@/lib/utils";
+import { SearchScope } from "@/components/search/SearchScope";
 
 export default async function PurchasesPage() {
   const user = await requireUser();
@@ -20,11 +21,7 @@ export default async function PurchasesPage() {
 
   return (
     <div>
-      <PageHeader
-        eyebrow="Supply chain"
-        title="Purchasing"
-        description="Supplier records and goods-in. Receiving a purchase order creates lots against each SKU."
-      />
+      <PageHeader title="Purchases" description="Orders from suppliers. Receiving an order adds the stock to inventory." />
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         {suppliers.map((supplier) => (
           <div key={supplier.id} className="rounded-2xl border border-pine-900/10 bg-white p-4 shadow-panel">
@@ -34,11 +31,16 @@ export default async function PurchasesPage() {
           </div>
         ))}
       </div>
+      <SearchScope placeholder="Search supplier or order number">
       <div className="space-y-4">
         {orders.map((order) => {
           const total = order.items.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
           return (
-            <article key={order.id} className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
+            <article
+              key={order.id}
+              data-search={`${order.reference} ${order.supplier.name} ${order.status} ${order.items.map((i) => i.product.name).join(" ")}`.toLowerCase()}
+              className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel"
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-mono text-xs">{order.reference}</p>
@@ -64,6 +66,7 @@ export default async function PurchasesPage() {
           );
         })}
       </div>
+      </SearchScope>
     </div>
   );
 }

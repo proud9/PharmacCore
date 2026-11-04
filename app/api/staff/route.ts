@@ -4,13 +4,13 @@ import { z } from "zod";
 import { canManageStaff, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { ROLES } from "@/lib/utils";
+import { STAFF_ROLES } from "@/lib/utils";
 
 const schema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(8),
-  role: z.enum(ROLES),
+  role: z.enum(STAFF_ROLES),
 });
 
 export async function POST(request: Request) {

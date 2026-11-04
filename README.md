@@ -1,42 +1,43 @@
-# PharmaCore
+# Pharmacy
 
-Commercial pharmacy management system for digital records, remote staff login, inventory, stock takes, dispensing, and business statistics.
+Pharmacy management system for stock, sales, patient records, and wholesale orders. Amounts are in Kwacha (ZMW).
 
-## What it covers
+## Start and stop
 
-- Role-based remote login (admin, pharmacist, technician, cashier, inventory)
-- Patient records and prescription workflow
-- SKU catalogue with lot/expiry tracking and FEFO stock deduction
-- Point-of-sale / dispense desk
-- Cycle counts that post variances
-- Purchase orders and goods-in
-- 30-day margin, mix, and tender analytics
-- Audit trail
+In PowerShell, use `npm.cmd` (plain `npm` may be blocked):
 
-This is an operations system for a licensed pharmacy. It is not a substitute for local regulatory software certification (ePDMP, NHS Spine, controlled-drug registers, and similar).
-
-## Run locally
-
-```bash
-npm install
-npm run setup
-npm run dev
+```powershell
+npm.cmd run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open http://localhost:3000
 
-Demo accounts (all `@pharmacore.local`):
+Stop the system with `Ctrl+C` in that terminal.
 
-| Role | Email prefix | Password |
+First time only:
+
+```powershell
+npm.cmd install
+npm.cmd run setup
+```
+
+## Sign-in accounts (demo)
+
+| Who | Email | Password |
 | --- | --- | --- |
-| Administrator | admin | Admin123! |
-| Pharmacist | pharmacist | Pharma123! |
-| Technician | tech | Tech123! |
-| Cashier | cashier | Cash123! |
-| Inventory | stock | Stock123! |
+| Administrator | admin@pharmacore.local | Admin123! |
+| Wholesale manager | wholesale@pharmacore.local | Whole123! |
+| Pharmacist | pharmacist@pharmacore.local | Pharma123! |
+| Cashier | cashier@pharmacore.local | Cash123! |
+| Hospital buyer (UTH) | uth@pharmacore.local | Buyer123! |
+| Clinic buyer | clinic@pharmacore.local | Buyer123! |
+| Pharmacy buyer | partner@pharmacore.local | Buyer123! |
 
-## Production notes
+## What to show
 
-- Change `AUTH_SECRET` and move `DATABASE_URL` to PostgreSQL (`provider = "postgresql"` in Prisma).
-- Put the app behind HTTPS and your pharmacy VPN or SSO.
-- Restrict who can dispense controlled medicines and keep a legally required CD register alongside this system if your jurisdiction requires it.
+- **Home** — sales, low stock, items near expiry
+- **Sales counter** — sell and reduce stock
+- **Inventory** — products, batches, expiry
+- **Wholesale orders** — hospitals/clinics send orders; you reply with a ZMW price and a ready date
+- **Buyers** — create a login for another hospital, clinic, or pharmacy
+- **Search** — top bar finds products, patients, sales, and orders

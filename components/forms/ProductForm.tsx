@@ -16,9 +16,10 @@ export function ProductForm({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formEl = event.currentTarget;
     setLoading(true);
     setError("");
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formEl);
     const body = {
       sku: form.get("sku"),
       barcode: form.get("barcode") || undefined,
@@ -45,13 +46,13 @@ export function ProductForm({
       setError(data.error ?? "Could not save product");
       return;
     }
-    event.currentTarget.reset();
+    formEl.reset();
     router.refresh();
   }
 
   return (
     <form onSubmit={onSubmit} className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
-      <h2 className="font-display text-xl text-pine-900">New SKU</h2>
+      <h2 className="font-display text-xl text-pine-900">Add product</h2>
       <div className="mt-4 grid gap-3">
         <div>
           <label>Name</label>
@@ -90,7 +91,7 @@ export function ProductForm({
         <div>
           <label>Category</label>
           <select name="categoryId">
-            <option value="">Uncategorised</option>
+            <option value="">No category</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -130,7 +131,7 @@ export function ProductForm({
       </div>
       {error ? <p className="mt-2 text-sm text-rust">{error}</p> : null}
       <button className="btn btn-primary mt-4 w-full" disabled={loading}>
-        {loading ? "Saving…" : "Add to catalogue"}
+        {loading ? "Saving…" : "Add product"}
       </button>
     </form>
   );

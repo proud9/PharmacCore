@@ -9,7 +9,8 @@ export function PatientForm() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     const response = await fetch("/api/patients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -20,7 +21,7 @@ export function PatientForm() {
       setError(data.error ?? "Could not save patient");
       return;
     }
-    event.currentTarget.reset();
+    formEl.reset();
     router.refresh();
   }
 

@@ -16,6 +16,7 @@ export type SessionUser = {
   email: string;
   name: string;
   role: Role;
+  institutionId?: string | null;
 };
 
 export async function signSession(user: SessionUser) {
@@ -59,11 +60,23 @@ export async function requireUser() {
   if (!session) return null;
   const user = await db.user.findUnique({ where: { id: session.id } });
   if (!user || !user.active) return null;
-  return { ...session, role: user.role as Role };
+  return {
+    ...session,
+    role: user.role as Role,
+    institutionId: user.institutionId,
+  };
 }
 
 export function canManageStaff(role: string) {
   return role === "ADMIN";
+}
+
+export function canWholesale(role: string) {
+  return role === "ADMIN" || role === "WHOLESALE_ADMIN";
+}
+
+export function isBuyer(role: string) {
+  return role === "BUYER";
 }
 
 export function canDispense(role: string) {

@@ -20,7 +20,7 @@ export function DispenseButton({ id }: { id: string }) {
   return (
     <div className="mt-3">
       <button className="btn btn-primary" onClick={run}>
-        Dispense and deduct stock
+        Dispense
       </button>
       {error ? <p className="mt-1 text-sm text-rust">{error}</p> : null}
     </div>

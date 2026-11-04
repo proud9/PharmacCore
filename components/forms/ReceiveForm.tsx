@@ -9,7 +9,8 @@ export function ReceiveForm({ productId }: { productId: string }) {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     const response = await fetch("/api/stock/receive", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -25,8 +26,8 @@ export function ReceiveForm({ productId }: { productId: string }) {
       setMessage(data.error ?? "Receive failed");
       return;
     }
-    event.currentTarget.reset();
-    setMessage("Lot received.");
+    formEl.reset();
+    setMessage("Stock received.");
     router.refresh();
   }
 
@@ -48,7 +49,7 @@ export function ReceiveForm({ productId }: { productId: string }) {
         </div>
       </div>
       {message ? <p className="mt-2 text-sm">{message}</p> : null}
-      <button className="btn btn-primary mt-4 w-full">Post goods inward</button>
+      <button className="btn btn-primary mt-4 w-full">Add to stock</button>
     </form>
   );
 }

@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { money } from "@/lib/utils";
+import { SearchScope } from "@/components/search/SearchScope";
 
 export default async function SalesPage() {
   const [sales, pharmacy] = await Promise.all([
@@ -12,16 +13,13 @@ export default async function SalesPage() {
     }),
     db.pharmacy.findUnique({ where: { id: "main" } }),
   ]);
-  const currency = pharmacy?.currency ?? "USD";
+  const currency = pharmacy?.currency ?? "ZMW";
 
   return (
     <div>
-      <PageHeader
-        eyebrow="Finance"
-        title="Sales ledger"
-        description="Every posted invoice with tender type, cashier, and line items."
-      />
-      <section className="overflow-hidden rounded-2xl border border-pine-900/10 bg-white shadow-panel">
+      <PageHeader title="Sales" description="Receipts, payment method, cashier, and patient." />
+      <section className="overflow-hidden rounded-2xl border border-pine-900/10 bg-white p-4 shadow-panel">
+        <SearchScope placeholder="Search invoice, cashier, or patient">
         <table className="table-grid">
           <thead>
             <tr>
@@ -29,13 +27,16 @@ export default async function SalesPage() {
               <th>When</th>
               <th>Cashier</th>
               <th>Patient</th>
-              <th>Tender</th>
+              <th>Payment</th>
               <th>Total</th>
             </tr>
           </thead>
           <tbody>
             {sales.map((sale) => (
-              <tr key={sale.id}>
+              <tr
+                key={sale.id}
+                data-search={`${sale.invoiceNo} ${sale.cashier.name} ${sale.patient ? `${sale.patient.firstName} ${sale.patient.lastName}` : "walk-in"} ${sale.payment}`.toLowerCase()}
+              >
                 <td className="font-mono text-xs">{sale.invoiceNo}</td>
                 <td>{format(sale.createdAt, "dd MMM HH:mm")}</td>
                 <td>{sale.cashier.name}</td>
@@ -44,8 +45,9 @@ export default async function SalesPage() {
                 <td>{money(sale.total, currency)}</td>
               </tr>
             ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </SearchScope>
       </section>
     </div>
   );

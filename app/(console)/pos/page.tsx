@@ -17,12 +17,11 @@ export default async function PosPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Front counter"
-        title="Dispense desk"
-        description="Search the catalogue, attach a patient when needed, and close the sale with FEFO stock deduction."
+        title="Sales counter"
+        description="Find a product, add it to the basket, and complete the sale. Stock is taken from the oldest batch first."
       />
       <PosDesk
-        currency={pharmacy?.currency ?? "USD"}
+        currency={pharmacy?.currency ?? "ZMW"}
         patients={patients.map((p) => ({ id: p.id, name: `${p.lastName}, ${p.firstName}` }))}
         products={products.map((p) => ({
           id: p.id,

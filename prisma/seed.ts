@@ -5,6 +5,10 @@ import { addDays, subDays } from "date-fns";
 const db = new PrismaClient();
 
 async function main() {
+  await db.consignmentEvent.deleteMany();
+  await db.consignmentItem.deleteMany();
+  await db.consignment.deleteMany();
+  await db.institution.deleteMany();
   await db.saleItem.deleteMany();
   await db.sale.deleteMany();
   await db.stockTakeItem.deleteMany();
@@ -24,13 +28,21 @@ async function main() {
 
   const password = (plain: string) => bcrypt.hash(plain, 10);
 
-  const [admin, pharmacist, technician, cashier, inventory] = await Promise.all([
+  const [admin, wholesaleAdmin, pharmacist, technician, cashier, inventory] = await Promise.all([
     db.user.create({
       data: {
         email: "admin@pharmacore.local",
         name: "Amara Okonkwo",
         passwordHash: await password("Admin123!"),
         role: "ADMIN",
+      },
+    }),
+    db.user.create({
+      data: {
+        email: "wholesale@pharmacore.local",
+        name: "Chanda Mulenga",
+        passwordHash: await password("Whole123!"),
+        role: "WHOLESALE_ADMIN",
       },
     }),
     db.user.create({
@@ -70,12 +82,12 @@ async function main() {
   await db.pharmacy.create({
     data: {
       id: "main",
-      name: "Northbridge Community Pharmacy",
-      license: "PH-8821-NB",
-      phone: "+1 (415) 555-0148",
-      email: "hello@northbridge.pharmacy",
-      address: "18 Harbor Lane, Northbridge",
-      currency: "USD",
+      name: "Pharmacy",
+      license: "ZAMRA-PH-8821",
+      phone: "+260 211 555 148",
+      email: "hello@lusakacentral.pharmacy",
+      address: "",
+      currency: "ZMW",
     },
   });
 
@@ -286,6 +298,61 @@ async function main() {
       requiresRx: false,
       qty: 33,
       expiryDays: 150,
+      kind: "EQUIPMENT",
+    },
+    {
+      sku: "BP-DIG-01",
+      barcode: "890123400011",
+      name: "Digital blood pressure monitor",
+      genericName: "Sphygmomanometer",
+      form: "device",
+      strength: "unit",
+      manufacturer: "MedLine",
+      categoryId: devices.id,
+      supplierId: medline.id,
+      sellingPrice: 890,
+      costPrice: 420,
+      reorderLevel: 8,
+      requiresRx: false,
+      qty: 14,
+      expiryDays: 900,
+      kind: "EQUIPMENT",
+    },
+    {
+      sku: "OXM-FNG-01",
+      barcode: "890123400012",
+      name: "Finger pulse oximeter",
+      genericName: "Pulse oximeter",
+      form: "device",
+      strength: "unit",
+      manufacturer: "Greenleaf",
+      categoryId: devices.id,
+      supplierId: greenleaf.id,
+      sellingPrice: 320,
+      costPrice: 140,
+      reorderLevel: 12,
+      requiresRx: false,
+      qty: 22,
+      expiryDays: 900,
+      kind: "EQUIPMENT",
+    },
+    {
+      sku: "GLV-NTR-100",
+      barcode: "890123400013",
+      name: "Nitrile examination gloves (100)",
+      genericName: "Examination gloves",
+      form: "box",
+      strength: "100 count",
+      manufacturer: "Apex",
+      categoryId: devices.id,
+      supplierId: apex.id,
+      sellingPrice: 95,
+      costPrice: 40,
+      reorderLevel: 40,
+      requiresRx: false,
+      qty: 80,
+      expiryDays: 700,
+      kind: "EQUIPMENT",
     },
   ];
 
@@ -307,6 +374,8 @@ async function main() {
         reorderLevel: item.reorderLevel,
         requiresRx: item.requiresRx,
         controlled: "controlled" in item ? Boolean(item.controlled) : false,
+        kind: "kind" in item && item.kind ? item.kind : "MEDICINE",
+        wholesalePrice: item.sellingPrice,
       },
     });
     await db.batch.create({
@@ -462,6 +531,133 @@ async function main() {
     },
   });
 
+  const uth = await db.institution.create({
+    data: {
+      name: "University Teaching Hospital",
+      kind: "HOSPITAL",
+      license: "MOH-UTH-01",
+      contact: "Procurement desk",
+      phone: "+260 211 251 000",
+      email: "stores@uth.example",
+      address: "Nationalist Road, Lusaka",
+      users: {
+        create: {
+          email: "uth@pharmacore.local",
+          name: "Mwaka Banda",
+          passwordHash: await password("Buyer123!"),
+          role: "BUYER",
+        },
+      },
+    },
+    include: { users: true },
+  });
+  const clinic = await db.institution.create({
+    data: {
+      name: "Kabulonga Family Clinic",
+      kind: "CLINIC",
+      license: "HPCZ-CL-441",
+      contact: "Sister-in-charge",
+      phone: "+260 211 555 220",
+      email: "orders@kabulonga.example",
+      address: "Kabulonga, Lusaka",
+      users: {
+        create: {
+          email: "clinic@pharmacore.local",
+          name: "Grace Phiri",
+          passwordHash: await password("Buyer123!"),
+          role: "BUYER",
+        },
+      },
+    },
+    include: { users: true },
+  });
+  await db.institution.create({
+    data: {
+      name: "Garden Compound Pharmacy",
+      kind: "PHARMACY",
+      license: "ZAMRA-RT-19",
+      contact: "Owner pharmacist",
+      phone: "+260 977 555 018",
+      email: "desk@gardenpharmacy.example",
+      address: "Great East Road, Lusaka",
+      users: {
+        create: {
+          email: "partner@pharmacore.local",
+          name: "Joseph Zulu",
+          passwordHash: await password("Buyer123!"),
+          role: "BUYER",
+        },
+      },
+    },
+  });
+
+  const uthBuyer = uth.users[0];
+  const clinicBuyer = clinic.users[0];
+  const gloves = products.find((p) => p.sku === "GLV-NTR-100") ?? products[products.length - 1];
+  const oximeter = products.find((p) => p.sku === "OXM-FNG-01") ?? products[products.length - 2];
+
+  await db.consignment.create({
+    data: {
+      reference: "CN-UTH-2401",
+      institutionId: uth.id,
+      requestedById: uthBuyer.id,
+      status: "REQUESTED",
+      notes: "Emergency stores restock for medical wards.",
+      deliveryAddress: "UTH main pharmacy receiving bay",
+      items: {
+        create: [
+          { productId: products[0].id, quantity: 200 },
+          { productId: products[6].id, quantity: 150 },
+          { productId: gloves.id, quantity: 40 },
+        ],
+      },
+      events: {
+        create: {
+          status: "REQUESTED",
+          message: "Consignment request submitted",
+          actorName: uthBuyer.name,
+        },
+      },
+    },
+  });
+
+  await db.consignment.create({
+    data: {
+      reference: "CN-KAB-2408",
+      institutionId: clinic.id,
+      requestedById: clinicBuyer.id,
+      quotedById: wholesaleAdmin.id,
+      status: "QUOTED",
+      notes: "Clinic opening pack plus diagnostics.",
+      deliveryAddress: "Kabulonga Family Clinic stores",
+      quotedAmount: 18640,
+      readyOn: addDays(new Date(), 3),
+      quotedAt: new Date(),
+      adminMessage: "Full consignment can be ready in three days. Amount is ZMW 18,640 including delivery in Lusaka.",
+      items: {
+        create: [
+          { productId: products[2].id, quantity: 80 },
+          { productId: oximeter.id, quantity: 4 },
+        ],
+      },
+      events: {
+        create: [
+          {
+            status: "REQUESTED",
+            message: "Consignment request submitted",
+            actorName: clinicBuyer.name,
+            createdAt: subDays(new Date(), 1),
+          },
+          {
+            status: "QUOTED",
+            message: "Quoted K 18640.00 · ready in 3 days.",
+            actorName: wholesaleAdmin.name,
+          },
+        ],
+      },
+    },
+  });
+
   await db.auditLog.create({
     data: {
       userId: admin.id,
@@ -473,11 +669,12 @@ async function main() {
   });
 
   console.log("PharmaCore seeded.");
-  console.log("Admin:       admin@pharmacore.local / Admin123!");
-  console.log("Pharmacist:  pharmacist@pharmacore.local / Pharma123!");
-  console.log("Technician:  tech@pharmacore.local / Tech123!");
-  console.log("Cashier:     cashier@pharmacore.local / Cash123!");
-  console.log("Inventory:   stock@pharmacore.local / Stock123!");
+  console.log("Admin:            admin@pharmacore.local / Admin123!");
+  console.log("Wholesale admin:  wholesale@pharmacore.local / Whole123!");
+  console.log("Pharmacist:       pharmacist@pharmacore.local / Pharma123!");
+  console.log("UTH buyer:        uth@pharmacore.local / Buyer123!");
+  console.log("Clinic buyer:     clinic@pharmacore.local / Buyer123!");
+  console.log("Pharmacy buyer:   partner@pharmacore.local / Buyer123!");
 }
 
 main()

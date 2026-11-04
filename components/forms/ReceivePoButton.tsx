@@ -20,7 +20,7 @@ export function ReceivePoButton({ id }: { id: string }) {
   return (
     <div className="mt-3">
       <button className="btn btn-primary" onClick={run}>
-        Receive into inventory
+        Receive stock
       </button>
       {error ? <p className="mt-1 text-sm text-rust">{error}</p> : null}
     </div>

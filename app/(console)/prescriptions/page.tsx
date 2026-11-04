@@ -5,6 +5,7 @@ import { Badge } from "@/components/Badge";
 import { PrescriptionForm } from "@/components/forms/PrescriptionForm";
 import { DispenseButton } from "@/components/forms/DispenseButton";
 import { canDispense, requireUser } from "@/lib/auth";
+import { SearchScope } from "@/components/search/SearchScope";
 
 export default async function PrescriptionsPage() {
   const user = await requireUser();
@@ -20,15 +21,16 @@ export default async function PrescriptionsPage() {
 
   return (
     <div>
-      <PageHeader
-        eyebrow="Clinical workflow"
-        title="Prescriptions"
-        description="File, hold, and dispense. Dispensing deducts stock from the earliest-expiring lots."
-      />
+      <PageHeader title="Prescriptions" description="Record a prescription and dispense it when the medicines are ready." />
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
+        <SearchScope placeholder="Search patient, doctor, or prescription number">
         <div className="space-y-4">
           {prescriptions.map((rx) => (
-            <article key={rx.id} className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
+            <article
+              key={rx.id}
+              data-search={`${rx.rxNumber} ${rx.patient.firstName} ${rx.patient.lastName} ${rx.prescriber} ${rx.status} ${rx.items.map((i) => i.product.name).join(" ")}`.toLowerCase()}
+              className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel"
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-mono text-xs text-ink/50">{rx.rxNumber}</p>
@@ -56,6 +58,7 @@ export default async function PrescriptionsPage() {
             </article>
           ))}
         </div>
+        </SearchScope>
         {allow ? (
           <PrescriptionForm
             patients={patients.map((p) => ({
@@ -65,7 +68,7 @@ export default async function PrescriptionsPage() {
             products={products.map((p) => ({ id: p.id, name: p.name }))}
           />
         ) : (
-          <p className="text-sm text-ink/60">Pharmacist or administrator credentials are required to file prescriptions.</p>
+          <p className="text-sm text-ink/60">A pharmacist or administrator must sign in to add prescriptions.</p>
         )}
       </div>
     </div>

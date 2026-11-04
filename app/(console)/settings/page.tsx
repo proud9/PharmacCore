@@ -6,11 +6,7 @@ export default async function SettingsPage() {
 
   return (
     <div>
-      <PageHeader
-        eyebrow="Establishment"
-        title="Pharmacy profile"
-        description="Identity shown on the console. Production deployments should move this store to PostgreSQL and set AUTH_SECRET."
-      />
+      <PageHeader title="Pharmacy details" description="Name, licence, and contact information for this branch." />
       <section className="max-w-xl rounded-2xl border border-pine-900/10 bg-white p-6 shadow-panel">
         <dl className="space-y-4 text-sm">
           <div>

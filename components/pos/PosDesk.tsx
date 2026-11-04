@@ -78,7 +78,7 @@ export function PosDesk({
     }
     setCart([]);
     setPatientId("");
-    setMessage(`Posted ${data.invoiceNo}`);
+    setMessage(`Sale saved: ${data.invoiceNo}`);
     router.refresh();
   }
 
@@ -109,7 +109,7 @@ export function PosDesk({
       <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
         <h2 className="font-display text-xl text-pine-900">Basket</h2>
         <div className="mt-3 space-y-2">
-          {cart.length === 0 ? <p className="text-sm text-ink/60">No lines yet.</p> : null}
+          {cart.length === 0 ? <p className="text-sm text-ink/60">The basket is empty.</p> : null}
           {cart.map((line) => (
             <div key={line.id} className="flex items-center justify-between text-sm">
               <div>
@@ -137,7 +137,7 @@ export function PosDesk({
             </select>
           </div>
           <div>
-            <label>Tender</label>
+            <label>Payment</label>
             <select value={payment} onChange={(e) => setPayment(e.target.value)}>
               <option>CASH</option>
               <option>CARD</option>

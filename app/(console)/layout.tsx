@@ -10,7 +10,12 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   const pharmacy = await db.pharmacy.findUnique({ where: { id: "main" } });
 
   return (
-    <Shell name={user.name} role={ROLE_LABEL[user.role] ?? user.role} pharmacy={pharmacy?.name ?? "Pharmacy"}>
+    <Shell
+      name={user.name}
+      role={ROLE_LABEL[user.role] ?? user.role}
+      roleCode={user.role}
+      pharmacy={pharmacy?.name ?? "Pharmacy"}
+    >
       {children}
     </Shell>
   );

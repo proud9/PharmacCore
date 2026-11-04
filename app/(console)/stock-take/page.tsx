@@ -18,9 +18,8 @@ export default async function StockTakePage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Cycle count"
         title="Stock take"
-        description="Count physical packs against system quantities. Completing a take can post variances into lots."
+        description="Count what is on the shelf. When you finish, the system updates stock to match your count."
       />
       <StockTakeDesk
         products={products.map((p) => ({
