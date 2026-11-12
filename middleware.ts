@@ -53,7 +53,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (role === "BUYER" && !pathname.startsWith("/portal") && !pathname.startsWith("/api/")) {
+  if (
+    role === "BUYER" &&
+    !pathname.startsWith("/portal") &&
+    !pathname.startsWith("/api/") &&
+    !pathname.startsWith("/documents")
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/portal";
     return NextResponse.redirect(url);

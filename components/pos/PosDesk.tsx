@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { money } from "@/lib/utils";
 
@@ -31,6 +32,7 @@ export function PosDesk({
   const [patientId, setPatientId] = useState("");
   const [payment, setPayment] = useState("CASH");
   const [message, setMessage] = useState("");
+  const [receipt, setReceipt] = useState<{ id: string; invoiceNo: string } | null>(null);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -78,7 +80,8 @@ export function PosDesk({
     }
     setCart([]);
     setPatientId("");
-    setMessage(`Sale saved: ${data.invoiceNo}`);
+    setReceipt({ id: data.id, invoiceNo: data.invoiceNo });
+    setMessage("");
     router.refresh();
   }
 
@@ -151,6 +154,14 @@ export function PosDesk({
           <span>{money(subtotal, currency)}</span>
         </div>
         {message ? <p className="mt-2 text-sm">{message}</p> : null}
+        {receipt ? (
+          <p className="mt-2 text-sm">
+            Sale saved.{" "}
+            <Link className="text-pine-800 underline" href={`/documents/sales/${receipt.id}`}>
+              Print invoice {receipt.invoiceNo}
+            </Link>
+          </p>
+        ) : null}
         <button className="btn btn-primary mt-4 w-full" disabled={!cart.length} onClick={checkout}>
           Complete sale
         </button>

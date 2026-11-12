@@ -221,13 +221,21 @@ model AuditLog {
 }
 
 model Pharmacy {
-  id       String  @id @default("main")
-  name     String
-  license  String?
-  phone    String?
-  email    String?
-  address  String?
-  currency String  @default("ZMW")
+  id            String  @id @default("main")
+  name          String
+  license       String?
+  phone         String?
+  email         String?
+  address       String?
+  website       String?
+  tpin          String?
+  currency      String  @default("ZMW")
+  bankName      String?
+  accountName   String?
+  accountNumber String?
+  bankBranch    String?
+  swiftCode     String?
+  logoPath      String?
 }
 
 model Institution {
@@ -258,7 +266,19 @@ model Consignment {
   notes           String?
   adminMessage    String?
   quotedAmount    Float?
+  taxRate         Float              @default(0)
   readyOn         DateTime?
+  validUntil      DateTime?
+  dueOn           DateTime?
+  amountPaid      Float              @default(0)
+  invoiceNo       String?            @unique
+  deliveryNoteNo  String?            @unique
+  terms           String?
+  deliveryMethod  String?
+  vehicleDriver   String?
+  dispatchFrom    String?
+  deliveryNotes   String?
+  invoicedAt      DateTime?
   deliveryAddress String?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
@@ -274,6 +294,9 @@ model ConsignmentItem {
   productId     String
   product       Product      @relation(fields: [productId], references: [id])
   quantity      Int
+  unitPrice     Float?
+  qtyDelivered  Int?
+  remarks       String?
   notes         String?
 }
 

@@ -4,11 +4,14 @@ import { canWholesale, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
+import Link from "next/link";
 import { QuoteForm } from "@/components/wholesale/QuoteForm";
+import { InvoiceForm } from "@/components/wholesale/InvoiceForm";
+import { DeliveryForm } from "@/components/wholesale/DeliveryForm";
 import { StatusActions } from "@/components/wholesale/StatusActions";
 import { OrderTrack } from "@/components/wholesale/OrderTrack";
 import { adminNextStatuses, KIND_LABEL, STATUS_LABEL, statusTone } from "@/lib/wholesale";
-import { money } from "@/lib/utils";
+import { DELIVERY_STATUSES, documentTotals, INVOICE_STATUSES, QUOTE_STATUSES, zmw } from "@/lib/documents";
 
 export default async function WholesaleOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
@@ -25,6 +28,7 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
     },
   });
   if (!order) notFound();
+  const totals = documentTotals(order.items, order.taxRate, order.quotedAmount);
 
   return (
     <div>
@@ -35,7 +39,7 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
       />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Badge tone={statusTone(order.status)}>{STATUS_LABEL[order.status]}</Badge>
-        {order.quotedAmount != null ? <Badge tone="brass">{money(order.quotedAmount, "ZMW")}</Badge> : null}
+        {order.quotedAmount != null ? <Badge tone="brass">{zmw(totals.total)}</Badge> : null}
         {order.readyOn ? <Badge>Ready {format(order.readyOn, "dd MMM yyyy")}</Badge> : null}
       </div>
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.9fr]">
@@ -48,6 +52,8 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
                   <th>Item</th>
                   <th>Type</th>
                   <th>Qty</th>
+                  <th>Unit price</th>
+                  <th>Line total</th>
                 </tr>
               </thead>
               <tbody>
@@ -59,6 +65,8 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
                     </td>
                     <td>{item.product.kind === "EQUIPMENT" ? "Equipment" : "Medicine"}</td>
                     <td>{item.quantity}</td>
+                    <td>{item.unitPrice == null ? "—" : zmw(item.unitPrice)}</td>
+                    <td>{item.unitPrice == null ? "—" : zmw(item.unitPrice * item.quantity)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -82,7 +90,68 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
               {order.quotedBy ? <p className="mt-2 text-xs text-ink/50">By {order.quotedBy.name}</p> : null}
             </section>
           ) : null}
-          {["REQUESTED", "QUOTED", "ACCEPTED"].includes(order.status) ? <QuoteForm id={order.id} /> : null}
+          <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
+            <h2 className="font-display text-xl text-pine-900">Documents</h2>
+            <div className="mt-3 flex flex-col gap-2 text-sm">
+              {QUOTE_STATUSES.includes(order.status) ? (
+                <Link className="text-pine-800 underline" href={`/documents/${order.id}/quotation`}>
+                  Open quotation
+                </Link>
+              ) : (
+                <p className="text-ink/50">Quotation appears after you send a price.</p>
+              )}
+              {order.invoiceNo ? (
+                <Link className="text-pine-800 underline" href={`/documents/${order.id}/invoice`}>
+                  Open invoice {order.invoiceNo}
+                </Link>
+              ) : null}
+              {order.deliveryNoteNo ? (
+                <Link className="text-pine-800 underline" href={`/documents/${order.id}/delivery`}>
+                  Open delivery note {order.deliveryNoteNo}
+                </Link>
+              ) : null}
+            </div>
+          </section>
+          {["REQUESTED", "QUOTED", "ACCEPTED"].includes(order.status) ? (
+            <QuoteForm
+              id={order.id}
+              taxRate={order.taxRate}
+              terms={order.terms ?? ""}
+              adminMessage={order.adminMessage ?? ""}
+              lines={order.items.map((item) => ({
+                id: item.id,
+                name: item.product.name,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice ?? item.product.wholesalePrice ?? item.product.sellingPrice,
+              }))}
+            />
+          ) : null}
+          {INVOICE_STATUSES.includes(order.status) && order.quotedAmount != null ? (
+            <InvoiceForm
+              id={order.id}
+              issued={Boolean(order.invoiceNo)}
+              amountPaid={order.amountPaid}
+              terms={order.terms ?? ""}
+              dueOn={order.dueOn ? format(order.dueOn, "yyyy-MM-dd") : ""}
+            />
+          ) : null}
+          {DELIVERY_STATUSES.includes(order.status) ? (
+            <DeliveryForm
+              id={order.id}
+              issued={Boolean(order.deliveryNoteNo)}
+              deliveryMethod={order.deliveryMethod ?? ""}
+              vehicleDriver={order.vehicleDriver ?? ""}
+              dispatchFrom={order.dispatchFrom ?? ""}
+              deliveryNotes={order.deliveryNotes ?? ""}
+              lines={order.items.map((item) => ({
+                id: item.id,
+                name: item.product.name,
+                quantity: item.quantity,
+                qtyDelivered: item.qtyDelivered ?? item.quantity,
+                remarks: item.remarks ?? "",
+              }))}
+            />
+          ) : null}
         </div>
       </div>
     </div>

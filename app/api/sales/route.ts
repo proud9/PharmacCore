@@ -32,12 +32,14 @@ export async function POST(request: Request) {
   try {
     const sale = await db.$transaction(async (tx) => {
       let subtotal = 0;
+      let tax = 0;
       const lines = [];
       for (const item of parsed.data.items) {
         const product = await tx.product.findUnique({ where: { id: item.productId } });
         if (!product || !product.active) throw new Error("Unknown product");
         const line = product.sellingPrice * item.quantity;
         subtotal += line;
+        tax += line * ((product.taxRate ?? 0) / 100);
         lines.push({
           productId: product.id,
           quantity: item.quantity,
@@ -45,7 +47,6 @@ export async function POST(request: Request) {
           total: line,
         });
       }
-      const tax = 0;
       const total = Math.max(0, subtotal + tax - parsed.data.discount);
 
       for (const line of lines) {
