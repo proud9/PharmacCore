@@ -1,6 +1,7 @@
 "use client";
 
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { money } from "@/lib/utils";
 
 export function SalesChart({ data }: { data: { day: string; total: number }[] }) {
   return (
@@ -18,7 +19,7 @@ export function SalesChart({ data }: { data: { day: string; total: number }[] })
           <YAxis tick={{ fontSize: 12 }} />
           <Tooltip
             contentStyle={{ borderRadius: 12, border: "1px solid #12211f22" }}
-            formatter={(value) => [`$${Number(value).toFixed(2)}`, "Sales"]}
+            formatter={(value) => [money(Number(value)), "Sales"]}
           />
           <Area type="monotone" dataKey="total" stroke="#0f3d37" fill="url(#salesFill)" strokeWidth={2} />
         </AreaChart>

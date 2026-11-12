@@ -1,0 +1,86 @@
+# PharmaCore — design system
+
+The UI looks like a calm, professional pharmacy ledger: deep pine green, warm parchment and a brass accent, with a serif display face over a clean sans. Every new screen should look like it was always part of the app. When in doubt, copy an existing page.
+
+## Do not
+
+- Add colors, fonts, shadows or radii outside the tokens below.
+- Add a component library (shadcn, MUI, Chakra), CSS-in-JS, or a second icon set.
+- Add dark mode, gradients on cards, glassmorphism, emoji, or illustrations.
+- Use raw Tailwind palette colors (`blue-500`, `gray-200`) for UI chrome. The only exceptions are the status tints in `Badge`.
+- Show `$` or unformatted numbers for money; always use `money()` (ZMW, shown as `K 11.20`).
+- Show raw enum codes (`WHOLESALE_ADMIN`, `QUOTED`) to users; use `ROLE_LABEL` / `STATUS_LABEL`.
+
+## Tokens (`tailwind.config.ts`)
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `ink` | `#12211f` | Body text (`text-ink`, muted `text-ink/60`–`/70`) |
+| `pine-950` | `#071614` | Sidebar, login hero panel |
+| `pine-900` | `#0b2a26` | Headings, borders at `/10`–`/15` |
+| `pine-800` | `#0f3d37` | Primary button, chart stroke |
+| `pine-700` | `#16554c` | Labels and eyebrows at `/70`–`/80`, chart fill, hover |
+| `pine-600` | `#1c6b60` | Reserve |
+| `sage-100` | `#e8f0ea` | Ghost hover, neutral badge |
+| `sage-300` | `#b7cfc0` | Text on dark (sidebar) |
+| `sage-500` | `#6f9a86` | Secondary accents |
+| `parchment` | `#f4efe6` | Page background, text on dark buttons |
+| `brass` | `#c4a35a` | Brand mark, focus ring (`ring-brass/40`), "in progress" badge |
+| `rust` | `#b85c38` | Form errors (`text-rust`) |
+
+Page background is `bg-parchment` plus two soft radial washes (brass top-left, pine top-right), set in `globals.css`. Don't add more.
+
+**Shadow:** only `shadow-panel`. **Radii:** `rounded-2xl` panels/cards, `rounded-xl` nav items and brand mark, `rounded-lg` inputs/buttons, `rounded-full` badges.
+
+## Typography
+
+- **Display** `font-display` (Fraunces): page titles `text-3xl`, panel titles `text-xl`, stat values `text-3xl`, login hero `text-5xl`. Always `text-pine-900` on light backgrounds.
+- **Sans** `font-sans` (Outfit), the default: body `text-sm`.
+- **Eyebrow / label / table header**: `text-[11px] font-semibold uppercase tracking-[0.12em–0.18em] text-pine-700/70`.
+- **References** (invoice, Rx, order numbers): `font-mono text-xs`.
+
+## Layout
+
+- **Shell** (`components/Shell.tsx`): 260px dark sidebar + content column (stacked below `lg`). The header is white at 70% with blur and holds the user name and role, global search, and Sign out. Main content is `px-6 py-6`.
+- **Page** = `<PageHeader title description action? />`, then sections. Titles are short nouns ("Sales counter", "Wholesale orders"); the description is one plain sentence about what the page does.
+- **Panel**: `rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel`, with an optional `<h2 className="mb-3 font-display text-xl text-pine-900">`.
+- **Grids**: KPI rows use `grid gap-4 md:grid-cols-2 xl:grid-cols-4` (or `md:grid-cols-3`) of `<StatCard>`. A main list beside a side form/panel uses `grid gap-6 xl:grid-cols-[1.4fr_0.9fr]`, wider column first and stacked below `xl`.
+- The app must stay usable down to phone width; tables may scroll horizontally inside their panel.
+
+## Components (reuse before creating)
+
+| Need | Use |
+| --- | --- |
+| Page title | `PageHeader` |
+| KPI | `StatCard` (label, value, hint) |
+| Status pill | `Badge` with tone `neutral` / `good` / `warn` / `bad` / `brass`; for wholesale, `statusTone()` |
+| Table | `<table className="table-grid">` (header and cell styles come from globals.css) |
+| Buttons | `btn btn-primary` (one main action per form/panel), `btn btn-ghost` (secondary, Sign out) |
+| Inputs | Plain `<label>` + `<input>/<select>/<textarea>`, already styled globally; stack in `grid gap-3` |
+| Charts | `SalesChart` (area) / `MixChart` (horizontal bar): recharts, pine colors, faint grid, no legend clutter |
+| Icons | `lucide-react`, `h-4 w-4` inline, `h-5 w-5` in the brand mark |
+| Search | `HeaderSearch` / `SearchInput` / `SearchScope` |
+
+Badge tone meaning: **good** = done or healthy (delivered, dispensed, completed); **brass** = in progress (price sent, preparing, out for delivery); **warn** = needs attention (requested, low stock, expiring); **bad** = stopped (declined, cancelled, out of stock); **neutral** = informational.
+
+## Forms
+
+- Client component, submits with `fetch` as JSON, shows the API `error` as `<p className="mt-2 text-sm text-rust">`, then resets and calls `router.refresh()`.
+- One full-width `btn btn-primary` at the bottom with a verb label ("Create account", "Record sale", "Send price").
+- Use HTML validation (`required`, `type`, `min`) as well as the server-side zod checks.
+
+## Voice and copy
+
+- Plain English for pharmacy counter staff in Zambia. Short, direct, no jargon: "Sales counter", "Stock take", "Price sent", "Ready for delivery", "Activity log".
+- Sentence case for titles and buttons. Labels are uppercase only through the global `label` style.
+- Money in Kwacha via `money()`. Dates: `dd MMM yyyy`, with ` HH:mm` when time matters; `dd MMM` on chart axes.
+- Empty states: one sentence about what will appear and how to add it.
+
+## Checklist for a new screen
+
+1. Lives under `app/(console)/` or `app/(portal)/portal/` and inherits the Shell.
+2. Starts with `PageHeader`; content sits in panels.
+3. Uses only the tokens and components above.
+4. Statuses go through `Badge`, money through `money()`, labels through the `*_LABEL` maps.
+5. Nav entry added to the right role list in `Shell.tsx`, if the page is top-level.
+6. Checked at phone width and desktop width.

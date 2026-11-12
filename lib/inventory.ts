@@ -1,4 +1,5 @@
 import { addDays } from "date-fns";
+import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 
 export async function onHand(productId: string) {
@@ -6,8 +7,9 @@ export async function onHand(productId: string) {
   return batches.reduce((sum, batch) => sum + batch.quantity, 0);
 }
 
-export async function deductStock(productId: string, quantity: number) {
-  const batches = await db.batch.findMany({
+/** Removes stock earliest-expiry first. Pass the transaction client so a failure rolls back every batch change. */
+export async function deductStock(tx: Prisma.TransactionClient, productId: string, quantity: number) {
+  const batches = await tx.batch.findMany({
     where: { productId, quantity: { gt: 0 } },
     orderBy: { expiryDate: "asc" },
   });
@@ -15,7 +17,7 @@ export async function deductStock(productId: string, quantity: number) {
   for (const batch of batches) {
     if (remaining <= 0) break;
     const take = Math.min(batch.quantity, remaining);
-    await db.batch.update({
+    await tx.batch.update({
       where: { id: batch.id },
       data: { quantity: batch.quantity - take },
     });

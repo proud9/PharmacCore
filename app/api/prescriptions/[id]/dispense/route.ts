@@ -18,12 +18,14 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     return NextResponse.json({ error: "Prescription cannot be dispensed." }, { status: 400 });
   }
   try {
-    for (const item of rx.items) {
-      await deductStock(item.productId, item.quantity);
-    }
-    await db.prescription.update({
-      where: { id },
-      data: { status: "DISPENSED", dispensedAt: new Date(), pharmacistId: user.id },
+    await db.$transaction(async (tx) => {
+      for (const item of rx.items) {
+        await deductStock(tx, item.productId, item.quantity);
+      }
+      await tx.prescription.update({
+        where: { id },
+        data: { status: "DISPENSED", dispensedAt: new Date(), pharmacistId: user.id },
+      });
     });
     await audit({
       userId: user.id,

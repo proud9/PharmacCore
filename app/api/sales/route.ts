@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { isStaff, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { deductStock } from "@/lib/inventory";
 import { audit } from "@/lib/audit";
@@ -23,6 +23,7 @@ const schema = z.object({
 export async function POST(request: Request) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isStaff(user.role)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
       const total = Math.max(0, subtotal + tax - parsed.data.discount);
 
       for (const line of lines) {
-        await deductStock(line.productId, line.quantity);
+        await deductStock(tx, line.productId, line.quantity);
       }
 
       return tx.sale.create({
