@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 
 const schema = z.object({
-  name: z.string().min(1),
+  name: z.string().trim().min(1),
   license: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().optional(),
@@ -19,9 +19,35 @@ const schema = z.object({
   swiftCode: z.string().optional(),
 });
 
-function blank(value: string | undefined) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
+const OPTIONAL_FIELDS = [
+  "license",
+  "phone",
+  "email",
+  "address",
+  "website",
+  "tpin",
+  "bankName",
+  "accountName",
+  "accountNumber",
+  "bankBranch",
+  "swiftCode",
+] as const;
+
+type OptionalField = (typeof OPTIONAL_FIELDS)[number];
+
+/**
+ * Only fields present in the request are changed: an omitted field keeps its
+ * stored value, and a field sent as an empty string is cleared.
+ */
+function sentFields(data: z.infer<typeof schema>) {
+  const fields: Partial<Record<OptionalField, string | null>> = {};
+  for (const key of OPTIONAL_FIELDS) {
+    const value = data[key];
+    if (value === undefined) continue;
+    const trimmed = value.trim();
+    fields[key] = trimmed ? trimmed : null;
+  }
+  return fields;
 }
 
 export async function POST(request: Request) {
@@ -34,27 +60,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Enter the pharmacy trading name." }, { status: 400 });
   }
 
+  const fields = sentFields(parsed.data);
   const pharmacy = await db.pharmacy.upsert({
     where: { id: "main" },
-    update: {
-      name: parsed.data.name.trim(),
-      license: blank(parsed.data.license),
-      phone: blank(parsed.data.phone),
-      email: blank(parsed.data.email),
-      address: blank(parsed.data.address),
-      website: blank(parsed.data.website),
-      tpin: blank(parsed.data.tpin),
-      bankName: blank(parsed.data.bankName),
-      accountName: blank(parsed.data.accountName),
-      accountNumber: blank(parsed.data.accountNumber),
-      bankBranch: blank(parsed.data.bankBranch),
-      swiftCode: blank(parsed.data.swiftCode),
-    },
-    create: {
-      id: "main",
-      name: parsed.data.name.trim(),
-      currency: "ZMW",
-    },
+    update: { name: parsed.data.name, ...fields },
+    create: { id: "main", name: parsed.data.name, currency: "ZMW", ...fields },
   });
 
   await audit({
