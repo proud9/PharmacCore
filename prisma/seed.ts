@@ -86,8 +86,15 @@ async function main() {
       license: "ZAMRA-PH-8821",
       phone: "+260 211 555 148",
       email: "hello@lusakacentral.pharmacy",
-      address: "",
+      address: "Cairo Road, Lusaka",
+      website: "lusakacentral.pharmacy",
+      tpin: "1001234567",
       currency: "ZMW",
+      bankName: "Zanaco",
+      accountName: "Pharmacy",
+      accountNumber: "0123456789012",
+      bankBranch: "Lusaka Main",
+      swiftCode: "ZNCOZMLU",
     },
   });
 
@@ -631,13 +638,16 @@ async function main() {
       notes: "Clinic opening pack plus diagnostics.",
       deliveryAddress: "Kabulonga Family Clinic stores",
       quotedAmount: 18640,
+      taxRate: 0,
       readyOn: addDays(new Date(), 3),
+      validUntil: addDays(new Date(), 14),
       quotedAt: new Date(),
+      terms: "Prices are in Zambian Kwacha and valid for 14 days. Delivery within Lusaka is included.",
       adminMessage: "Full consignment can be ready in three days. Amount is ZMW 18,640 including delivery in Lusaka.",
       items: {
         create: [
-          { productId: products[2].id, quantity: 80 },
-          { productId: oximeter.id, quantity: 4 },
+          { productId: products[2].id, quantity: 80, unitPrice: 220 },
+          { productId: oximeter.id, quantity: 4, unitPrice: 260 },
         ],
       },
       events: {

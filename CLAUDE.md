@@ -69,8 +69,10 @@ app/
     reports/              Analytics
     staff/                Users (ADMIN only)
     audit/                Activity log
-    settings/             Pharmacy details (ADMIN can edit)
+    settings/             Pharmacy details, bank details, logo (ADMIN, WHOLESALE_ADMIN can edit)
     wholesale/            Orders list, [id] detail (quote/status), accounts/ (buyers)
+  documents/              Printable pages (no Shell): [id]/[kind] wholesale quotation/invoice/delivery note,
+                          sales/[id] retail receipt; buyers may open these
   (portal)/portal/        Buyer area; layout.tsx requires role BUYER
     page.tsx              My orders
     new/                  New order
@@ -78,18 +80,22 @@ app/
   api/                    Route handlers (POST unless noted)
     auth/login, auth/logout
     sales, patients, products, prescriptions, prescriptions/[id]/dispense
-    stock/receive, stock-take, purchases/[id]/receive, staff, settings
-    wholesale/accounts, consignments, consignments/[id]/quote, consignments/[id]/status
+    stock/receive, stock-take, purchases/[id]/receive, staff
+    wholesale/accounts, consignments, consignments/[id]/quote, consignments/[id]/status,
+                          consignments/[id]/invoice, consignments/[id]/delivery
+    pharmacy, pharmacy/logo (GET+POST)   Pharmacy details and logo (canWholesale)
     search (GET)          Header search, scoped by role
 components/
   Shell.tsx               Sidebar + header; role-based nav lives here
   PageHeader, StatCard, Badge, SalesChart, MixChart
+  documents/              TradeDocument, InvoiceSheet, CompanyMark, DocumentFrame, PrintButton
   forms/, pos/, stock/, search/, wholesale/   Client components per feature
 lib/
   auth.ts                 Session sign/read/cookie, requireUser(), role guards
   paths.ts                homePath(role)
   utils.ts                cn(), money(), ref(), stockOf(), ROLES, ROLE_LABEL
   inventory.ts            onHand(), deductStock(tx, ...) (FEFO), receiveBatch(), expiryWindow() (90 days)
+  documents.ts            Helpers for printable trade documents
   wholesale.ts            Consignment statuses, labels, statusTone(), adminNextStatuses()
   audit.ts                audit() writes AuditLog
   db.ts                   Prisma singleton
@@ -119,7 +125,7 @@ SQLite has no enums: status/role/kind fields are strings. Keep the allowed value
 | INVENTORY | /dashboard | Retail + adjust stock |
 | BUYER | /portal | Own institution's orders only |
 
-Guards in `lib/auth.ts`: `isStaff` (any non-buyer), `canManageStaff`, `canEditSettings`, `canWholesale`, `canDispense`, `canAdjustStock`, `isBuyer`. Middleware lets every signed-in role reach `/api/*`, so **every route needs its own role guard**; staff-only routes use at least `isStaff`. A new role or permission means updating `ROLES`/`ROLE_LABEL`, the guard, `Shell.tsx` nav, `homePath`, and `middleware.ts` together.
+Guards in `lib/auth.ts`: `isStaff` (any non-buyer), `canManageStaff`, `canWholesale`, `canDispense`, `canAdjustStock`, `isBuyer`. Middleware lets every signed-in role reach `/api/*`, so **every route needs its own role guard**; staff-only routes use at least `isStaff`. A new role or permission means updating `ROLES`/`ROLE_LABEL`, the guard, `Shell.tsx` nav, `homePath`, and `middleware.ts` together.
 
 Wholesale flow: `REQUESTED → QUOTED → ACCEPTED → PREPARING → READY → DISPATCHED → DELIVERED`, with `DECLINED`/`CANCELLED` exits. Staff transitions come from `adminNextStatuses()`; the buyer can accept a quote (`QUOTED → ACCEPTED`) or cancel while `REQUESTED`/`QUOTED`. Every transition writes a ConsignmentEvent.
 

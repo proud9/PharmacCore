@@ -3,7 +3,21 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function QuoteForm({ id }: { id: string }) {
+type Line = { id: string; name: string; quantity: number; unitPrice: number };
+
+export function QuoteForm({
+  id,
+  lines,
+  taxRate = 0,
+  terms = "",
+  adminMessage = "",
+}: {
+  id: string;
+  lines: Line[];
+  taxRate?: number;
+  terms?: string;
+  adminMessage?: string;
+}) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,15 +31,21 @@ export function QuoteForm({ id }: { id: string }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        quotedAmount: Number(form.get("quotedAmount")),
+        lines: lines.map((line) => ({
+          id: line.id,
+          unitPrice: Number(form.get(`price-${line.id}`)),
+        })),
+        taxRate: Number(form.get("taxRate")),
         readyOn: form.get("readyOn"),
+        validUntil: form.get("validUntil"),
         adminMessage: form.get("adminMessage"),
+        terms: form.get("terms"),
       }),
     });
     const data = await response.json();
     setLoading(false);
     if (!response.ok) {
-      setError(data.error ?? "Could not send quote");
+      setError(data.error ?? "Could not send quotation");
       return;
     }
     router.refresh();
@@ -33,27 +53,46 @@ export function QuoteForm({ id }: { id: string }) {
 
   return (
     <form onSubmit={onSubmit} className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
-      <h2 className="font-display text-xl text-pine-900">Send a price</h2>
-      <p className="mt-1 text-sm text-ink/60">
-        Enter the full order amount in Kwacha (ZMW) and the date everything can be ready for delivery.
-      </p>
-      <div className="mt-4 grid gap-3">
-        <div>
-          <label>Amount (ZMW)</label>
-          <input name="quotedAmount" type="number" min={1} step="0.01" required placeholder="24850.00" />
-        </div>
-        <div>
-          <label>Ready for delivery on</label>
-          <input name="readyOn" type="date" required />
+      <h2 className="font-display text-xl text-pine-900">Send a quotation</h2>
+      <p className="mt-1 text-sm text-ink/60">Price each line in Kwacha. Tax is added to the line totals.</p>
+      <div className="mt-4 space-y-3">
+        {lines.map((line) => (
+          <div key={line.id} className="grid grid-cols-[1fr_88px] items-end gap-2">
+            <div>
+              <label>
+                {line.name} × {line.quantity}
+              </label>
+              <input name={`price-${line.id}`} type="number" min={0} step="0.01" required defaultValue={line.unitPrice} />
+            </div>
+            <p className="pb-2 text-xs text-ink/50">ZMW each</p>
+          </div>
+        ))}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label>Tax rate (%)</label>
+            <input name="taxRate" type="number" min={0} max={100} step="0.01" required defaultValue={taxRate} />
+          </div>
+          <div>
+            <label>Ready for delivery</label>
+            <input name="readyOn" type="date" required />
+          </div>
+          <div>
+            <label>Quotation valid until</label>
+            <input name="validUntil" type="date" required />
+          </div>
         </div>
         <div>
           <label>Message to the buyer</label>
-          <textarea name="adminMessage" rows={4} required placeholder="Delivery notes, replacements, or timing…" />
+          <textarea name="adminMessage" rows={3} required defaultValue={adminMessage} placeholder="Delivery notes, replacements, or timing…" />
+        </div>
+        <div>
+          <label>Terms on the quotation</label>
+          <textarea name="terms" rows={2} defaultValue={terms} placeholder="Prices in ZMW, valid for 14 days…" />
         </div>
       </div>
       {error ? <p className="mt-2 text-sm text-rust">{error}</p> : null}
       <button className="btn btn-primary mt-4 w-full" disabled={loading}>
-        {loading ? "Sending…" : "Send price to buyer"}
+        {loading ? "Sending…" : "Send quotation"}
       </button>
     </form>
   );

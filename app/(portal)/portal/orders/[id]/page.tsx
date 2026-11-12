@@ -6,7 +6,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { OrderTrack } from "@/components/wholesale/OrderTrack";
 import { StatusActions } from "@/components/wholesale/StatusActions";
-import { money } from "@/lib/utils";
+import Link from "next/link";
+import { documentTotals, zmw } from "@/lib/documents";
 import { STATUS_LABEL, statusTone } from "@/lib/wholesale";
 
 export default async function BuyerOrderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,6 +22,7 @@ export default async function BuyerOrderPage({ params }: { params: Promise<{ id:
     },
   });
   if (!order || order.institutionId !== user.institutionId) notFound();
+  const totals = documentTotals(order.items, order.taxRate, order.quotedAmount);
 
   const buyerOptions =
     order.status === "QUOTED"
@@ -46,7 +48,7 @@ export default async function BuyerOrderPage({ params }: { params: Promise<{ id:
         <div className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
           <p className="text-[11px] uppercase tracking-[0.14em] text-pine-700/70">Quoted amount</p>
           <p className="mt-2 font-display text-2xl text-pine-900">
-            {order.quotedAmount != null ? money(order.quotedAmount, "ZMW") : "Not yet quoted"}
+            {order.quotedAmount != null ? zmw(totals.total) : "Not yet quoted"}
           </p>
         </div>
         <div className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
@@ -73,6 +75,23 @@ export default async function BuyerOrderPage({ params }: { params: Promise<{ id:
             ))}
           </ul>
           <StatusActions id={order.id} options={buyerOptions} />
+          <div className="mt-4 flex flex-col gap-2 text-sm">
+            {order.quotedAmount != null ? (
+              <Link className="text-pine-800 underline" href={`/documents/${order.id}/quotation`}>
+                View quotation
+              </Link>
+            ) : null}
+            {order.invoiceNo ? (
+              <Link className="text-pine-800 underline" href={`/documents/${order.id}/invoice`}>
+                View invoice
+              </Link>
+            ) : null}
+            {order.deliveryNoteNo ? (
+              <Link className="text-pine-800 underline" href={`/documents/${order.id}/delivery`}>
+                View delivery note
+              </Link>
+            ) : null}
+          </div>
         </section>
         <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
           <h2 className="mb-3 font-display text-xl text-pine-900">Progress</h2>

@@ -1,20 +1,39 @@
+import { requireUser, canWholesale } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
-import { SettingsForm } from "@/components/forms/SettingsForm";
-import { canEditSettings, requireUser } from "@/lib/auth";
+import { PharmacyForm } from "@/components/forms/PharmacyForm";
 
 export default async function SettingsPage() {
-  const [user, pharmacy] = await Promise.all([
-    requireUser(),
-    db.pharmacy.findUnique({ where: { id: "main" } }),
-  ]);
-  const allow = Boolean(user && canEditSettings(user.role));
+  const user = await requireUser();
+  const pharmacy = await db.pharmacy.findUnique({ where: { id: "main" } });
+  const canEdit = Boolean(user && canWholesale(user.role));
 
   return (
     <div>
-      <PageHeader title="Pharmacy details" description="Name, licence, and contact information for this branch." />
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.9fr]">
-        <section className="rounded-2xl border border-pine-900/10 bg-white p-6 shadow-panel">
+      <PageHeader
+        title="Pharmacy details"
+        description="Name, licence, and the bank details printed on quotations and invoices."
+      />
+      {canEdit ? (
+        <PharmacyForm
+          hasLogo={Boolean(pharmacy?.logoPath)}
+          details={{
+            name: pharmacy?.name ?? "",
+            license: pharmacy?.license ?? "",
+            phone: pharmacy?.phone ?? "",
+            email: pharmacy?.email ?? "",
+            address: pharmacy?.address ?? "",
+            website: pharmacy?.website ?? "",
+            tpin: pharmacy?.tpin ?? "",
+            bankName: pharmacy?.bankName ?? "",
+            accountName: pharmacy?.accountName ?? "",
+            accountNumber: pharmacy?.accountNumber ?? "",
+            bankBranch: pharmacy?.bankBranch ?? "",
+            swiftCode: pharmacy?.swiftCode ?? "",
+          }}
+        />
+      ) : (
+        <section className="max-w-xl rounded-2xl border border-pine-900/10 bg-white p-6 shadow-panel">
           <dl className="space-y-4 text-sm">
             <div>
               <dt className="text-[11px] uppercase tracking-[0.14em] text-pine-700/70">Trading name</dt>
@@ -22,42 +41,23 @@ export default async function SettingsPage() {
             </div>
             <div>
               <dt className="text-[11px] uppercase tracking-[0.14em] text-pine-700/70">Licence</dt>
-              <dd>{pharmacy?.license || "—"}</dd>
+              <dd>{pharmacy?.license}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] uppercase tracking-[0.14em] text-pine-700/70">TPIN</dt>
+              <dd>{pharmacy?.tpin}</dd>
             </div>
             <div>
               <dt className="text-[11px] uppercase tracking-[0.14em] text-pine-700/70">Contact</dt>
               <dd>
-                {pharmacy?.phone || "—"}
+                {pharmacy?.phone}
                 <br />
                 {pharmacy?.email}
               </dd>
             </div>
-            <div>
-              <dt className="text-[11px] uppercase tracking-[0.14em] text-pine-700/70">Address</dt>
-              <dd>{pharmacy?.address || "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-[11px] uppercase tracking-[0.14em] text-pine-700/70">Currency</dt>
-              <dd>{pharmacy?.currency}</dd>
-            </div>
           </dl>
         </section>
-        {allow ? (
-          <SettingsForm
-            pharmacy={{
-              name: pharmacy?.name ?? "Pharmacy",
-              license: pharmacy?.license ?? null,
-              phone: pharmacy?.phone ?? null,
-              email: pharmacy?.email ?? null,
-              address: pharmacy?.address ?? null,
-            }}
-          />
-        ) : (
-          <section className="rounded-2xl border border-pine-900/10 bg-white p-5 text-sm text-ink/70 shadow-panel">
-            Only an administrator can change these details.
-          </section>
-        )}
-      </div>
+      )}
     </div>
   );
 }

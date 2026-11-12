@@ -83,10 +83,6 @@ export function isStaff(role: string) {
   return role !== "BUYER";
 }
 
-export function canEditSettings(role: string) {
-  return role === "ADMIN";
-}
-
 export function canDispense(role: string) {
   return role === "ADMIN" || role === "PHARMACIST";
 }

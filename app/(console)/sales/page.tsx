@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { format } from "date-fns";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
@@ -37,7 +38,11 @@ export default async function SalesPage() {
                 key={sale.id}
                 data-search={`${sale.invoiceNo} ${sale.cashier.name} ${sale.patient ? `${sale.patient.firstName} ${sale.patient.lastName}` : "walk-in"} ${sale.payment}`.toLowerCase()}
               >
-                <td className="font-mono text-xs">{sale.invoiceNo}</td>
+                <td className="font-mono text-xs">
+                  <Link className="text-pine-800 underline" href={`/documents/sales/${sale.id}`}>
+                    {sale.invoiceNo}
+                  </Link>
+                </td>
                 <td>{format(sale.createdAt, "dd MMM HH:mm")}</td>
                 <td>{sale.cashier.name}</td>
                 <td>{sale.patient ? `${sale.patient.lastName}, ${sale.patient.firstName}` : "Walk-in"}</td>
