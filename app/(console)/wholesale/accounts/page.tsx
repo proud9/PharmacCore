@@ -40,7 +40,7 @@ export default async function BuyerAccountsPage() {
                   data-search={`${row.name} ${row.kind} ${row.contact ?? ""} ${row.users.map((u) => u.email).join(" ")}`.toLowerCase()}
                 >
                   <td>
-                    <p className="font-medium">{row.name}</p>
+                    <p>{row.name}</p>
                     <p className="text-xs text-ink/60">{row.contact}</p>
                   </td>
                   <td>

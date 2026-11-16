@@ -25,7 +25,7 @@ export default async function PurchasesPage() {
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         {suppliers.map((supplier) => (
           <div key={supplier.id} className="rounded-2xl border border-pine-900/10 bg-white p-4 shadow-panel">
-            <p className="font-medium">{supplier.name}</p>
+            <p>{supplier.name}</p>
             <p className="text-sm text-ink/60">{supplier.contact}</p>
             <p className="text-xs text-ink/50">{supplier.email}</p>
           </div>

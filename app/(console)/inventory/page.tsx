@@ -44,7 +44,7 @@ export default async function InventoryPage() {
                     data-search={`${product.name} ${product.sku} ${product.genericName ?? ""} ${product.category?.name ?? ""} ${product.barcode ?? ""}`.toLowerCase()}
                   >
                     <td>
-                      <Link href={`/inventory/${product.id}`} className="font-medium hover:underline">
+                      <Link href={`/inventory/${product.id}`} className="hover:underline">
                         {product.name}
                       </Link>
                       <p className="font-mono text-[11px] text-ink/50">

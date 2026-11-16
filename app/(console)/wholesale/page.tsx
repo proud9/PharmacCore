@@ -61,7 +61,7 @@ export default async function WholesaleDeskPage() {
                   <p className="text-[11px] text-ink/50">{format(order.createdAt, "dd MMM yyyy HH:mm")}</p>
                 </td>
                 <td>
-                  <p className="font-medium">{order.institution.name}</p>
+                  <p>{order.institution.name}</p>
                   <p className="text-xs text-ink/60">{KIND_LABEL[order.institution.kind] ?? order.institution.kind}</p>
                 </td>
                 <td>{order.items.length}</td>

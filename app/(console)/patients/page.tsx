@@ -32,7 +32,7 @@ export default async function PatientsPage() {
                   data-search={`${patient.firstName} ${patient.lastName} ${patient.phone ?? ""} ${patient.insurance ?? ""} ${patient.allergies ?? ""}`.toLowerCase()}
                 >
                   <td>
-                    <p className="font-medium">
+                    <p>
                       {patient.lastName}, {patient.firstName}
                     </p>
                     <p className="text-xs text-ink/60">
