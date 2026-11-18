@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { homePath } from "@/lib/paths";
 
-const PUBLIC = ["/", "/login", "/api/auth/login", "/api/auth/register"];
+const PUBLIC = ["/", "/login", "/api/auth/login", "/api/auth/register", "/api/demo-requests"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

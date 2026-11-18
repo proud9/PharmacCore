@@ -21,9 +21,15 @@ const config: Config = {
         parchment: "#f4efe6",
         brass: "#c4a35a",
         rust: "#b85c38",
+        // Parallax brand accents (see DESIGN.md)
+        dispensary: { DEFAULT: "#128c5e", soft: "#e3f3ec" },
+        shelf: "#eef3f0",
+        foil: "#6b7c77",
+        rule: "#d9e2de",
+        expiry: "#b86e0b",
       },
       fontFamily: {
-        display: ["var(--font-display)", "Georgia", "serif"],
+        display: ["var(--font-display)", "system-ui", "sans-serif"],
         sans: ["var(--font-source-sans)", "sans-serif"],
       },
       boxShadow: {

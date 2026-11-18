@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import { Playfair_Display, Source_Sans_3 } from "next/font/google";
+import { Schibsted_Grotesk, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 
-// Headings: Playfair Display (variable 400–900, roman + italic). Body: Source Sans 3.
-// Both are self-hosted by next/font.
-const display = Playfair_Display({
+// Headings: Schibsted Grotesk. Body: Source Sans 3. Both self-hosted by next/font.
+const display = Schibsted_Grotesk({
   subsets: ["latin"],
-  style: ["normal", "italic"],
+  weight: ["500", "600", "700"],
   variable: "--font-display",
 });
 
@@ -16,9 +15,9 @@ const sans = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "PharmaCore | A connected pharmaceutical industry",
+  title: "Parallax | Medical wholesale, kept in order",
   description:
-    "PharmaCore brings retail pharmacies, wholesale pharmacies, hospitals, and clinics together in one system.",
+    "Parallax runs your medical wholesale: stock in from manufacturers, orders in from pharmacies, hospitals and clinics, and every batch out of the warehouse on time.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

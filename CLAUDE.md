@@ -1,6 +1,8 @@
-# PharmaCore — project guide
+# Parallax — project guide
 
-Pharmacy management system for a single pharmacy branch in Zambia, with a wholesale side that sells to hospitals, clinics and other pharmacies. All amounts are in Kwacha (ZMW).
+**Parallax** (formerly PharmaCore) is built primarily for **medical wholesalers** in Zambia: inventory with batches and expiry, purchase orders from manufacturers, and orders from pharmacies, hospitals, clinics and other bulk customers through to dispatch. It also has a retail counter (sales, prescriptions). One installation = one wholesale business. All amounts are in Kwacha (ZMW).
+
+The name: parallax is how one object looks different from different points of view — management, warehouse staff and finance each get their own view of the same live data. Internal identifiers keep the old name on purpose (`pharmacore_session` cookie, `pharmacore:` localStorage keys, `@pharmacore.local` demo logins); renaming them would sign everyone out or lose drafts.
 
 Read [DESIGN.md](DESIGN.md) before touching any UI.
 
@@ -55,9 +57,11 @@ There is no test suite and no linter configured. Check changes with `npx tsc --n
 
 ```
 app/
-  layout.tsx              Root: fonts (Playfair Display headings, Source Sans 3 body, both via next/font), globals.css
+  layout.tsx              Root: fonts (Schibsted Grotesk headings, Source Sans 3 body, both via next/font), metadata, globals.css
+  icon.png                Favicon (Parallax logo)
+  page.tsx                Public landing page (styles in landing.module.css; components/landing/)
   page.tsx                Redirects to role home or /login
-  login/page.tsx          Split-screen sign-in
+  login/page.tsx          Split-screen sign-in (uses components/auth/AccountForm)
   (console)/              Staff area; layout.tsx requires a user and wraps in <Shell>
     dashboard/            Home: KPIs, 14-day sales chart, low stock, expiring soon
     pos/                  Sales counter (components/pos/PosDesk.tsx)
@@ -76,6 +80,7 @@ app/
     audit/                Activity log
     settings/             Pharmacy details, bank details, logo (ADMIN, WHOLESALE_ADMIN can edit)
     wholesale/            Orders list, [id] detail (quote/status), accounts/ (buyers)
+    demo-requests/        "Request a demo" submissions from the landing page (ADMIN only)
   documents/              Printable pages (no Shell): [id]/[kind] wholesale quotation/invoice/delivery note,
                           sales/[id] retail receipt; buyers may open these
   (portal)/portal/        Buyer area; layout.tsx requires role BUYER
@@ -98,10 +103,15 @@ app/
                           consignments/[id]/invoice, consignments/[id]/delivery
     pharmacy, pharmacy/logo (GET+POST)   Pharmacy details and logo (canWholesale)
     search (GET)          Header search, scoped by role
+    demo-requests         PUBLIC: landing page demo form (zod + honeypot field `website`)
+    demo-requests/[id]/contacted  Mark contacted / new (ADMIN)
+    auth/register         PUBLIC: creates a BUYER account + its Institution (landing page sign-up)
 components/
   Shell.tsx               Sidebar + header; role-based nav lives here
   PageHeader, StatCard, Badge, SalesChart, MixChart
   documents/              TradeDocument, InvoiceSheet, CompanyMark, DocumentFrame, PrintButton
+  landing/                LandingNav (scroll-spy), DispatchFeed (+ dispatches.ts), DemoRequestDialog
+  auth/AccountForm.tsx    Sign in / create account form (landing page + login); #sign-in / #create-account pick the tab
   inventory/              InventoryTable (add, CSV, row edit), EditItemRow, IntakeQueue, SheetLineFields
   stock/                  StockSheet (close qty count + finish only)
   forms/, pos/, search/, wholesale/   Client components per feature
@@ -164,6 +174,12 @@ Wholesale flow: `REQUESTED → QUOTED → ACCEPTED → PREPARING → READY → D
 - Imports use the `@/` alias. Use `cn()` for conditional classes.
 - UI copy is plain English for pharmacy staff ("Sales counter", not "POS"; "Price sent", not "QUOTED"). See DESIGN.md.
 - Schema changes: edit `schema.prisma`, run `npm run db:push`, update `seed.ts` so a fresh setup still works.
+
+## Landing page and brand
+
+- `app/page.tsx` is the public marketing page for wholesalers (signed-in visitors see "Open Parallax" instead of sign-in). Its copy speaks to wholesalers; the sign-up form creates **customer** (BUYER) accounts, and wholesalers are pointed to "Request a demo".
+- Company contact details in the footer are placeholders (`CONTACT` in `app/page.tsx`); social, terms and privacy links are `#` until real pages exist.
+- Logo files live in `public/brand/` (`parallax-logo.svg` master, PNGs at 64/256/512 with transparent backgrounds). The SVG wraps embedded PNGs (not true vectors) — use the PNGs on pages.
 
 ## Known issues
 

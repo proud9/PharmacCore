@@ -9,7 +9,6 @@ import {
   FileText,
   LayoutDashboard,
   LogOut,
-  Pill,
   Receipt,
   Settings,
   ShoppingCart,
@@ -21,6 +20,7 @@ import {
   Warehouse,
   Building2,
   PackagePlus,
+  Inbox,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -67,7 +67,7 @@ const BUYER_NAV = [
 function navFor(role: string) {
   if (role === "BUYER") return BUYER_NAV;
   if (role === "WHOLESALE_ADMIN") return WHOLESALE_ADMIN_NAV;
-  if (role === "ADMIN") return [...WHOLESALE_NAV, ...RETAIL_NAV];
+  if (role === "ADMIN") return [...WHOLESALE_NAV, ...RETAIL_NAV, { href: "/demo-requests", label: "Demo requests", icon: Inbox }];
   return RETAIL_NAV;
 }
 
@@ -135,11 +135,11 @@ export function Shell({
             collapsed ? "px-5 lg:justify-center lg:px-0" : "px-5",
           )}
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brass text-pine-950">
-            <Pill className="h-5 w-5" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white p-1">
+            <img src="/brand/parallax-logo.png" alt="" width={32} height={32} className="h-8 w-8" />
           </div>
           <div className={cn("min-w-0 flex-1", collapsed && "lg:hidden")}>
-            <p className="font-display text-lg font-semibold leading-none">PharmaCore</p>
+            <p className="font-display text-lg font-semibold leading-none">Parallax</p>
             <p className="mt-1 truncate text-[11px] uppercase tracking-[0.18em] text-sage-300">{pharmacy}</p>
           </div>
           <button

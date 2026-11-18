@@ -678,7 +678,7 @@ async function main() {
     },
   });
 
-  console.log("PharmaCore seeded.");
+  console.log("Parallax seeded.");
   console.log("Admin:            admin@pharmacore.local / Admin123!");
   console.log("Wholesale admin:  wholesale@pharmacore.local / Whole123!");
   console.log("Pharmacist:       pharmacist@pharmacore.local / Pharma123!");

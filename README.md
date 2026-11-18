@@ -1,6 +1,8 @@
-# PharmaCore
+# Parallax
 
-PharmaCore is a pharmacy management system for stock, sales, patient records, and wholesale orders. Amounts are in Kwacha (ZMW).
+Parallax runs a medical wholesale: inventory with batches and expiry dates, purchase orders from manufacturers, and orders from pharmacies, hospitals and clinics through to dispatch. It also covers retail counter sales and prescriptions. Amounts are in Kwacha (ZMW).
+
+The name: parallax is the way one object looks different from different points of view. Management, warehouse staff and finance each get their own view of the same live data.
 
 ## Setup and start
 

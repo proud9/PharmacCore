@@ -1,6 +1,6 @@
-# PharmaCore — design system
+# Parallax — design system
 
-The UI looks like a calm, professional pharmacy ledger: deep pine green, warm parchment and a brass accent, with a serif display face over a clean sans. Every new screen should look like it was always part of the app. When in doubt, copy an existing page.
+The signed-in app looks like a calm, professional pharmacy ledger: deep pine green, warm parchment and a brass accent, with a sturdy grotesque display face over a clean sans. The public landing page uses the brand palette below on white. Every new screen should look like it was always part of the app. When in doubt, copy an existing page.
 
 ## Do not
 
@@ -32,9 +32,27 @@ Page background is `bg-parchment` plus two soft radial washes (brass top-left, p
 
 **Shadow:** only `shadow-panel`. **Radii:** `rounded-2xl` panels/cards, `rounded-xl` nav items and brand mark, `rounded-lg` inputs/buttons, `rounded-full` badges.
 
+## Brand (Parallax)
+
+| Name | Hex | Tailwind | Use |
+| --- | --- | --- | --- |
+| Pine | `#0F3D37` | `pine-800` | Brand colour: headings, primary buttons |
+| Pine hover | `#164F47` | — | Primary button hover |
+| Dispensary green | `#128C5E` | `dispensary` | Accent: icons, active nav, "Delivered" |
+| Green tint | `#E3F3EC` | `dispensary-soft` | Status strips |
+| Expiry amber | `#B86E0B` | `expiry` | Expiry dates only |
+| Ink | `#13201E` | `ink` | Main text |
+| Body text | `#3A4A47` | — | Paragraphs (landing) |
+| Foil grey | `#6B7C77` | `foil` | Secondary text |
+| Rule | `#D9E2DE` | `rule` | Dividers, borders |
+| Shelf | `#EEF3F0` | `shelf` | Alternate section background |
+
+- **Logo:** `public/brand/parallax-logo.png` (pill behind, crossed bandage in front, pine on transparent). On dark backgrounds put it on a white rounded tile (`bg-white rounded-xl p-1`); never recolour or stretch it. Favicon is `app/icon.png`.
+- **Landing page** (`app/page.tsx` + `app/landing.module.css`): white base, left-aligned, plain lists divided by rules rather than card grids; sentence case, no all-caps labels above headings, no arrows appended to button text. One orchestrated motion only (the dispatch label feed), with a Pause control, hover pause and reduced-motion fallback. Keep landing styles in the CSS module so they never leak into the app.
+
 ## Typography
 
-- **Display** `font-display` (Playfair Display, loaded with `next/font/google` in `app/layout.tsx`; don't add a `<link>` tag): page titles `text-3xl`, panel titles `text-xl`, stat values `text-3xl`, login hero `text-5xl`. Always `text-pine-900` on light backgrounds.
+- **Display** `font-display` (Schibsted Grotesk 500–700, loaded with `next/font/google` in `app/layout.tsx`; don't add a `<link>` tag): page titles `text-3xl`, panel titles `text-xl`, stat values `text-3xl`, login hero `text-5xl`. Always `text-pine-900` on light backgrounds.
 - **Sans** `font-sans` (Source Sans 3, loaded with `next/font/google` as `--font-source-sans`), the default: body `text-sm`.
 - **Eyebrow / label / table header**: `text-[11px] font-semibold uppercase tracking-[0.12em–0.18em] text-pine-700/70`.
 - **References** (invoice, Rx, order numbers): `font-mono text-xs`.

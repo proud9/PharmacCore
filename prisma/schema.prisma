@@ -337,3 +337,16 @@ model StockIntake {
   createdAt       DateTime       @default(now())
   completedAt     DateTime?
 }
+
+/// "Request a demo" submissions from the public landing page. Administrators see them under Demo requests.
+model DemoRequest {
+  id            String    @id @default(cuid())
+  name          String
+  company       String
+  phone         String
+  email         String
+  notes         String?
+  createdAt     DateTime  @default(now())
+  contactedAt   DateTime?
+  contactedById String?
+}

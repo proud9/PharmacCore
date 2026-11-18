@@ -1,24 +1,47 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 
+type Mode = "login" | "register";
+
 type AccountFormProps = {
   allowRegistration?: boolean;
-  initialMode?: "login" | "register";
+  initialMode?: Mode;
 };
 
-export default function AccountForm({
-  allowRegistration = false,
-  initialMode = "login",
-}: AccountFormProps) {
+/** Hash links elsewhere on the page pick the tab: #sign-in or #create-account. */
+const HASH_MODE: Record<string, Mode> = { "#sign-in": "login", "#create-account": "register" };
+
+const labelClass = "mb-1.5 block text-[15px] font-semibold normal-case tracking-normal text-ink";
+
+export default function AccountForm({ allowRegistration = false, initialMode = "login" }: AccountFormProps) {
   const router = useRouter();
-  const [mode, setMode] = useState(initialMode);
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const isRegistration = allowRegistration && mode === "register";
+
+  useEffect(() => {
+    if (!allowRegistration) return;
+    const sync = () => {
+      const next = HASH_MODE[window.location.hash];
+      if (next) {
+        setMode(next);
+        setError("");
+      }
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, [allowRegistration]);
+
+  function choose(next: Mode) {
+    setMode(next);
+    setError("");
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,65 +83,61 @@ export default function AccountForm({
       router.push(safePath ?? data.home ?? (isRegistration ? "/portal" : "/dashboard"));
       router.refresh();
     } catch {
-      setError("Unable to reach PharmaCore. Check your connection and try again.");
+      setError("Unable to reach Parallax. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="w-full max-w-md rounded-3xl border border-pine-900/10 bg-white p-6 shadow-panel sm:p-8">
+    <div className="w-full max-w-md rounded-2xl border border-rule bg-white p-6 shadow-panel sm:p-8">
       {allowRegistration ? (
-        <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-sage-100 p-1" role="group" aria-label="Account action">
-          <button
-            type="button"
-            aria-pressed={!isRegistration}
-            onClick={() => {
-              setMode("login");
-              setError("");
-            }}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-              !isRegistration ? "bg-white text-pine-950" : "text-ink/65 hover:text-pine-900"
-            }`}
-          >
-            Sign in
-          </button>
-          <button
-            id="create-account"
-            type="button"
-            aria-pressed={isRegistration}
-            onClick={() => {
-              setMode("register");
-              setError("");
-            }}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-              isRegistration ? "bg-white text-pine-950" : "text-ink/65 hover:text-pine-900"
-            }`}
-          >
-            Create account
-          </button>
+        <div className="mb-6 flex gap-6 border-b border-rule" role="tablist" aria-label="Account">
+          {(
+            [
+              ["register", "Create an account"],
+              ["login", "Sign in"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={mode === value}
+              onClick={() => choose(value)}
+              className={`-mb-px border-b-2 pb-3 text-[17px] font-semibold transition-colors ${
+                mode === value ? "border-pine-800 text-pine-800" : "border-transparent text-foil hover:text-pine-800"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-      ) : null}
+      ) : (
+        <div className="mb-6">
+          <h2 className="font-display text-2xl text-pine-800">Sign in</h2>
+          <p className="mt-1 text-sm text-ink/60">Use your work email and password.</p>
+        </div>
+      )}
 
       <form onSubmit={onSubmit}>
-        <h2 className="font-display text-2xl text-pine-900 sm:text-3xl">
-          {isRegistration ? "Create an account" : "Sign in"}
-        </h2>
-        <p className="mt-1 text-sm text-ink/60">
-          {isRegistration
-            ? "Create an institution account for a pharmacy, hospital, or clinic."
-            : "Use your work email and password."}
-        </p>
-
-        <div className="mt-6 space-y-4">
+        <div className="space-y-4">
           {isRegistration ? (
             <>
               <div>
-                <RequiredLabel htmlFor="account-name">Your name</RequiredLabel>
-                <input id="account-name" name="name" type="text" required minLength={2} maxLength={100} autoComplete="name" />
+                <label htmlFor="institution-kind" className={labelClass}>
+                  Organisation type
+                </label>
+                <select id="institution-kind" name="kind" required defaultValue="PHARMACY">
+                  <option value="PHARMACY">Pharmacy</option>
+                  <option value="HOSPITAL">Hospital</option>
+                  <option value="CLINIC">Clinic</option>
+                </select>
               </div>
               <div>
-                <RequiredLabel htmlFor="institution-name">Organization name</RequiredLabel>
+                <label htmlFor="institution-name" className={labelClass}>
+                  Organisation name
+                </label>
                 <input
                   id="institution-name"
                   name="institutionName"
@@ -130,25 +149,24 @@ export default function AccountForm({
                 />
               </div>
               <div>
-                <RequiredLabel htmlFor="institution-kind">Organization type</RequiredLabel>
-                <select id="institution-kind" name="kind" required defaultValue="">
-                  <option value="" disabled>
-                    Select an organization type
-                  </option>
-                  <option value="PHARMACY">Pharmacy</option>
-                  <option value="HOSPITAL">Hospital</option>
-                  <option value="CLINIC">Clinic</option>
-                </select>
+                <label htmlFor="account-name" className={labelClass}>
+                  Your name
+                </label>
+                <input id="account-name" name="name" type="text" required minLength={2} maxLength={100} autoComplete="name" />
               </div>
             </>
           ) : null}
 
           <div>
-            <RequiredLabel htmlFor="account-email">Email</RequiredLabel>
+            <label htmlFor="account-email" className={labelClass}>
+              Work email
+            </label>
             <input id="account-email" name="email" type="email" required autoComplete="username" />
           </div>
           <div>
-            <RequiredLabel htmlFor="account-password">Password</RequiredLabel>
+            <label htmlFor="account-password" className={labelClass}>
+              Password
+            </label>
             <div className="relative">
               <input
                 id="account-password"
@@ -165,12 +183,12 @@ export default function AccountForm({
                 onClick={() => setShowPassword((visible) => !visible)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 aria-pressed={showPassword}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-pine-700/70 hover:text-pine-900"
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-foil hover:text-pine-800"
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-            {isRegistration ? <p className="mt-1 text-xs text-ink/60">Use at least 8 characters.</p> : null}
+            {isRegistration ? <p className="mt-1.5 text-sm text-foil">At least 8 characters.</p> : null}
           </div>
         </div>
 
@@ -179,21 +197,22 @@ export default function AccountForm({
             {error}
           </p>
         ) : null}
-        <button className="btn btn-primary mt-6 w-full" disabled={loading}>
+        <button className="btn btn-primary mt-6 h-12 w-full text-base" disabled={loading}>
           {loading ? (isRegistration ? "Creating account…" : "Signing in…") : isRegistration ? "Create account" : "Sign in"}
         </button>
+        {allowRegistration ? (
+          <p className="mt-4 text-center text-[15px] text-foil">
+            {isRegistration ? "Already have an account? " : "New to Parallax? "}
+            <button
+              type="button"
+              onClick={() => choose(isRegistration ? "login" : "register")}
+              className="font-semibold text-pine-800 underline underline-offset-4"
+            >
+              {isRegistration ? "Sign in" : "Create an account"}
+            </button>
+          </p>
+        ) : null}
       </form>
     </div>
-  );
-}
-
-function RequiredLabel({ htmlFor, children }: { htmlFor: string; children: string }) {
-  return (
-    <label htmlFor={htmlFor}>
-      {children}
-      <span className="ml-1 text-rust" aria-hidden="true">
-        *
-      </span>
-    </label>
   );
 }
