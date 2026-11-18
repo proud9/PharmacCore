@@ -2,7 +2,7 @@
   "name": "pharmacore",
   "version": "1.0.0",
   "private": true,
-  "description": "Commercial pharmacy management system — records, remote login, inventory, and analytics.",
+  "description": "PharmaCore pharmacy management system for records, remote login, inventory, and analytics.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

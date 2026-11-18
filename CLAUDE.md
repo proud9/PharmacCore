@@ -55,7 +55,7 @@ There is no test suite and no linter configured. Check changes with `npx tsc --n
 
 ```
 app/
-  layout.tsx              Root: fonts (Playfair Display display, Outfit sans, via next/font), globals.css
+  layout.tsx              Root: fonts (Playfair Display headings, Source Sans 3 body, both via next/font), globals.css
   page.tsx                Redirects to role home or /login
   login/page.tsx          Split-screen sign-in
   (console)/              Staff area; layout.tsx requires a user and wraps in <Shell>

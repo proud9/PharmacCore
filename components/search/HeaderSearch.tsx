@@ -59,7 +59,7 @@ export function HeaderSearch() {
                 className="flex w-full flex-col px-3 py-2 text-left hover:bg-sage-100/80"
               >
                 <span className="text-[10px] uppercase tracking-wide text-pine-700/70">{hit.group}</span>
-                <span className="text-sm font-medium">{hit.title}</span>
+                <span className="text-sm">{hit.title}</span>
                 <span className="text-xs text-ink/60">{hit.detail}</span>
               </button>
             ))

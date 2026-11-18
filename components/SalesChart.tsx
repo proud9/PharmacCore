@@ -19,7 +19,7 @@ export function SalesChart({ data }: { data: { day: string; total: number }[] })
           <YAxis tick={{ fontSize: 12 }} />
           <Tooltip
             contentStyle={{ borderRadius: 12, border: "1px solid #12211f22" }}
-            formatter={(value) => [money(Number(value)), "Sales"]}
+            formatter={(value) => [money(Number(value), "ZMW"), "Sales (ZMW)"]}
           />
           <Area type="monotone" dataKey="total" stroke="#0f3d37" fill="url(#salesFill)" strokeWidth={2} />
         </AreaChart>

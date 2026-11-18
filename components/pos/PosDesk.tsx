@@ -99,7 +99,7 @@ export function PosDesk({
               className="flex w-full items-center justify-between py-3 text-left hover:bg-sage-100/60"
             >
               <div>
-                <p className="font-medium">{product.name}</p>
+                <p>{product.name}</p>
                 <p className="text-xs text-ink/60">
                   {product.sku} · {product.stock} on hand {product.requiresRx ? "· Rx" : ""}
                 </p>

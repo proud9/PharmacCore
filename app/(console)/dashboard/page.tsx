@@ -69,7 +69,7 @@ export default async function DashboardPage() {
               expiring.slice(0, 8).map((row) => (
                 <div key={`${row.product}-${row.lot}`} className="flex items-center justify-between gap-3 text-sm">
                   <div>
-                    <p className="font-medium">{row.product}</p>
+                    <p>{row.product}</p>
                     <p className="text-xs text-ink/60">
                       {row.lot} · {row.qty} on hand
                     </p>

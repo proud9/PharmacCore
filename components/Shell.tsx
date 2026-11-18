@@ -139,7 +139,7 @@ export function Shell({
             <Pill className="h-5 w-5" />
           </div>
           <div className={cn("min-w-0 flex-1", collapsed && "lg:hidden")}>
-            <p className="font-display text-lg leading-none">Pharmacy</p>
+            <p className="font-display text-lg font-semibold leading-none">PharmaCore</p>
             <p className="mt-1 truncate text-[11px] uppercase tracking-[0.18em] text-sage-300">{pharmacy}</p>
           </div>
           <button
@@ -200,7 +200,7 @@ export function Shell({
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-pine-900/10 bg-white/70 px-6 py-4 backdrop-blur">
           <div className="min-w-[160px]">
             <p className="text-xs text-pine-700/70">{roleCode === "BUYER" ? "Buyer portal" : "Staff"}</p>
-            <p className="font-medium">
+            <p>
               {name} · {role}
             </p>
           </div>

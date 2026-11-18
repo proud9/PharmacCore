@@ -35,7 +35,7 @@ Page background is `bg-parchment` plus two soft radial washes (brass top-left, p
 ## Typography
 
 - **Display** `font-display` (Playfair Display, loaded with `next/font/google` in `app/layout.tsx`; don't add a `<link>` tag): page titles `text-3xl`, panel titles `text-xl`, stat values `text-3xl`, login hero `text-5xl`. Always `text-pine-900` on light backgrounds.
-- **Sans** `font-sans` (Outfit), the default: body `text-sm`.
+- **Sans** `font-sans` (Source Sans 3, loaded with `next/font/google` as `--font-source-sans`), the default: body `text-sm`.
 - **Eyebrow / label / table header**: `text-[11px] font-semibold uppercase tracking-[0.12em–0.18em] text-pine-700/70`.
 - **References** (invoice, Rx, order numbers): `font-mono text-xs`.
 

@@ -4,6 +4,7 @@
 
 :root {
   color-scheme: light;
+  --font-source-sans: "Source Sans 3", Arial, sans-serif;
 }
 
 html,
@@ -12,10 +13,21 @@ body {
 }
 
 body {
-  @apply bg-parchment text-ink antialiased;
+  @apply bg-parchment font-sans font-normal leading-relaxed text-ink antialiased;
   background-image:
     radial-gradient(1200px 500px at 10% -10%, rgba(198, 163, 90, 0.12), transparent 50%),
     radial-gradient(900px 400px at 100% 0%, rgba(22, 85, 76, 0.08), transparent 45%);
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-semibold leading-tight;
+  }
 }
 
 .table-grid {
@@ -67,7 +79,7 @@ label {
 }
 
 .btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition;
 }
 
 .btn-primary {

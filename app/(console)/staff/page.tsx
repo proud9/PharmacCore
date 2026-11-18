@@ -33,7 +33,7 @@ export default async function StaffPage() {
                   key={member.id}
                   data-search={`${member.name} ${member.email} ${member.role} ${ROLE_LABEL[member.role] ?? ""}`.toLowerCase()}
                 >
-                  <td className="font-medium">{member.name}</td>
+                  <td>{member.name}</td>
                   <td>{member.email}</td>
                   <td>
                     <Badge>{ROLE_LABEL[member.role] ?? member.role}</Badge>

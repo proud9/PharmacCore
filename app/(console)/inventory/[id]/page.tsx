@@ -48,7 +48,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             </div>
             <div>
               <p className="text-[11px] uppercase tracking-[0.14em] text-pine-700/70">Supplier</p>
-              <p className="font-medium">{product.supplier?.name ?? "—"}</p>
+              <p>{product.supplier?.name ?? "—"}</p>
             </div>
           </div>
           <table className="table-grid">

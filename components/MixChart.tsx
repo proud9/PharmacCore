@@ -11,7 +11,7 @@ export function MixChart({ data }: { data: { name: string; value: number }[] }) 
           <CartesianGrid stroke="#12211f14" horizontal={false} />
           <XAxis type="number" tick={{ fontSize: 12 }} />
           <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11 }} />
-          <Tooltip formatter={(value) => [money(Number(value)), "Sales"]} />
+          <Tooltip formatter={(value) => [money(Number(value), "ZMW"), "Sales (ZMW)"]} />
           <Bar dataKey="value" fill="#16554c" radius={[0, 8, 8, 0]} />
         </BarChart>
       </ResponsiveContainer>
