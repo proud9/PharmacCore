@@ -28,7 +28,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         description={`${product.genericName ?? "—"} · ${product.form ?? ""} ${product.strength ?? ""}`}
       />
       <div className="mb-6 flex flex-wrap gap-2">
-        {product.requiresRx ? <Badge tone="brass">Prescription</Badge> : <Badge>OTC</Badge>}
+        {product.requiresRx ? <Badge tone="brass">Prescription required</Badge> : <Badge>No prescription</Badge>}
+        {product.controlled ? <Badge tone="bad">DDA</Badge> : <Badge>OTC</Badge>}
         {qty <= product.reorderLevel ? <Badge tone="warn">Needs reorder</Badge> : <Badge tone="good">In stock</Badge>}
         <Badge>{product.category?.name ?? "No category"}</Badge>
       </div>
@@ -54,6 +55,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <thead>
               <tr>
                 <th>Lot</th>
+                <th>Entered</th>
                 <th>Expiry</th>
                 <th>Qty</th>
                 <th></th>
@@ -63,6 +65,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               {product.batches.map((batch) => (
                 <tr key={batch.id}>
                   <td className="font-mono text-xs">{batch.lotNumber}</td>
+                  <td>{format(batch.receivedAt, "dd MMM yyyy")}</td>
                   <td>{format(batch.expiryDate, "dd MMM yyyy")}</td>
                   <td>{batch.quantity}</td>
                   <td>

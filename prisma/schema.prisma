@@ -8,28 +8,28 @@ datasource db {
 }
 
 model User {
-  id               String          @id @default(cuid())
-  email            String          @unique
-  name             String
-  passwordHash     String
-  role             String          @default("CASHIER")
-  active           Boolean         @default(true)
-  lastLoginAt      DateTime?
-  institutionId    String?
-  institution      Institution?    @relation(fields: [institutionId], references: [id])
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  sales            Sale[]
-  stockTakes       StockTake[]
-  auditLogs        AuditLog[]
-  prescriptions    Prescription[]
-  purchaseOrders   PurchaseOrder[]
-  consignments     Consignment[]   @relation("RequestedBy")
-  quotedOrders     Consignment[]   @relation("QuotedBy")
+  id             String          @id @default(cuid())
+  email          String          @unique
+  name           String
+  passwordHash   String
+  role           String          @default("CASHIER")
+  active         Boolean         @default(true)
+  lastLoginAt    DateTime?
+  institutionId  String?
+  institution    Institution?    @relation(fields: [institutionId], references: [id])
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  sales          Sale[]
+  stockTakes     StockTake[]
+  auditLogs      AuditLog[]
+  prescriptions  Prescription[]
+  purchaseOrders PurchaseOrder[]
+  consignments   Consignment[]   @relation("RequestedBy")
+  quotedOrders   Consignment[]   @relation("QuotedBy")
 }
 
 model Patient {
-  id            String          @id @default(cuid())
+  id            String         @id @default(cuid())
   firstName     String
   lastName      String
   dateOfBirth   DateTime?
@@ -40,8 +40,8 @@ model Patient {
   allergies     String?
   insurance     String?
   notes         String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   prescriptions Prescription[]
   sales         Sale[]
 }
@@ -87,7 +87,12 @@ model Product {
   taxRate           Float               @default(0)
   kind              String              @default("MEDICINE")
   wholesalePrice    Float?
+  categoryNo        String?
   active            Boolean             @default(true)
+  deletedAt         DateTime?
+  deleteReason      String?
+  deletedByName     String?
+  purgedAt          DateTime?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   batches           Batch[]
@@ -96,6 +101,7 @@ model Product {
   stockTakeItems    StockTakeItem[]
   prescriptionItems PrescriptionItem[]
   consignmentItems  ConsignmentItem[]
+  intakes           StockIntake[]
 }
 
 model Batch {
@@ -109,17 +115,19 @@ model Batch {
 }
 
 model PurchaseOrder {
-  id         String              @id @default(cuid())
-  reference  String              @unique
-  supplierId String
-  supplier   Supplier            @relation(fields: [supplierId], references: [id])
-  createdById String
-  createdBy  User                @relation(fields: [createdById], references: [id])
-  status     String              @default("DRAFT")
-  notes      String?
-  createdAt  DateTime            @default(now())
-  receivedAt DateTime?
-  items      PurchaseOrderItem[]
+  id             String              @id @default(cuid())
+  reference      String              @unique
+  supplierId     String
+  supplier       Supplier            @relation(fields: [supplierId], references: [id])
+  createdById    String
+  createdBy      User                @relation(fields: [createdById], references: [id])
+  status         String              @default("DRAFT")
+  notes          String?
+  createdAt      DateTime            @default(now())
+  receivedAt     DateTime?
+  items          PurchaseOrderItem[]
+  deliveryNoteNo String?
+  intakes        StockIntake[]
 }
 
 model PurchaseOrderItem {
@@ -133,17 +141,17 @@ model PurchaseOrderItem {
 }
 
 model Prescription {
-  id           String              @id @default(cuid())
-  rxNumber     String              @unique
+  id           String             @id @default(cuid())
+  rxNumber     String             @unique
   patientId    String
-  patient      Patient             @relation(fields: [patientId], references: [id])
+  patient      Patient            @relation(fields: [patientId], references: [id])
   pharmacistId String?
-  pharmacist   User?               @relation(fields: [pharmacistId], references: [id])
+  pharmacist   User?              @relation(fields: [pharmacistId], references: [id])
   prescriber   String
   clinic       String?
-  status       String              @default("PENDING")
+  status       String             @default("PENDING")
   notes        String?
-  createdAt    DateTime            @default(now())
+  createdAt    DateTime           @default(now())
   dispensedAt  DateTime?
   items        PrescriptionItem[]
 }
@@ -207,6 +215,7 @@ model StockTakeItem {
   systemQty   Int
   countedQty  Int
   variance    Int
+  unitPrice   Float     @default(0)
 }
 
 model AuditLog {
@@ -239,7 +248,7 @@ model Pharmacy {
 }
 
 model Institution {
-  id        String         @id @default(cuid())
+  id        String        @id @default(cuid())
   name      String
   kind      String
   license   String?
@@ -247,8 +256,8 @@ model Institution {
   phone     String?
   email     String?
   address   String?
-  active    Boolean        @default(true)
-  createdAt DateTime       @default(now())
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
   users     User[]
   orders    Consignment[]
 }
@@ -288,11 +297,11 @@ model Consignment {
 }
 
 model ConsignmentItem {
-  id            String       @id @default(cuid())
+  id            String      @id @default(cuid())
   consignmentId String
-  consignment   Consignment  @relation(fields: [consignmentId], references: [id], onDelete: Cascade)
+  consignment   Consignment @relation(fields: [consignmentId], references: [id], onDelete: Cascade)
   productId     String
-  product       Product      @relation(fields: [productId], references: [id])
+  product       Product     @relation(fields: [productId], references: [id])
   quantity      Int
   unitPrice     Float?
   qtyDelivered  Int?
@@ -308,4 +317,23 @@ model ConsignmentEvent {
   message       String?
   actorName     String?
   createdAt     DateTime    @default(now())
+}
+
+/// A delivered supplier line waiting in Inventory for its expiry, price and
+/// other details. Stock is only added once the details are entered (status DONE).
+model StockIntake {
+  id              String         @id @default(cuid())
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  productId       String
+  product         Product        @relation(fields: [productId], references: [id])
+  deliveryNoteNo  String
+  supplierName    String?
+  quantity        Int
+  unitCost        Float          @default(0)
+  status          String         @default("PENDING")
+  lotNumber       String?
+  expiryDate      DateTime?
+  createdAt       DateTime       @default(now())
+  completedAt     DateTime?
 }

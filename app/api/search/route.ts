@@ -43,7 +43,7 @@ export async function GET(request: Request) {
   }
 
   const [products, patients, sales, orders] = await Promise.all([
-    db.product.findMany({ take: 200, orderBy: { name: "asc" } }),
+    db.product.findMany({ where: { active: true }, take: 200, orderBy: { name: "asc" } }),
     db.patient.findMany({ take: 200, orderBy: { lastName: "asc" } }),
     db.sale.findMany({
       take: 80,

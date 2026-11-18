@@ -24,7 +24,9 @@ export default async function ReportsPage() {
       sum + sale.items.reduce((lineSum, item) => lineSum + (cogsMap.get(item.productId) ?? 0) * item.quantity, 0),
     0,
   );
-  const stockValue = products.reduce((sum, p) => sum + stockOf(p.batches) * p.costPrice, 0);
+  const stockValue = products
+    .filter((p) => p.active)
+    .reduce((sum, p) => sum + stockOf(p.batches) * p.costPrice, 0);
 
   const mix = new Map<string, number>();
   for (const sale of sales) {

@@ -21,7 +21,7 @@ export default async function PurchasesPage() {
 
   return (
     <div>
-      <PageHeader title="Purchases" description="Orders from suppliers. Receiving an order adds the stock to inventory." />
+      <PageHeader title="Purchases" description="Orders from suppliers. Receiving a delivery sends its items to Inventory, where expiry and price are entered before they join stock." />
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         {suppliers.map((supplier) => (
           <div key={supplier.id} className="rounded-2xl border border-pine-900/10 bg-white p-4 shadow-panel">
@@ -61,7 +61,18 @@ export default async function PurchasesPage() {
                   </li>
                 ))}
               </ul>
-              {allow && order.status !== "RECEIVED" ? <ReceivePoButton id={order.id} /> : null}
+              {order.deliveryNoteNo ? (
+                <p className="mt-2 text-xs text-ink/60">
+                  Delivery note <span className="font-mono">{order.deliveryNoteNo}</span>
+                  {order.receivedAt ? ` · received ${format(order.receivedAt, "dd MMM yyyy")}` : null}
+                </p>
+              ) : null}
+              {allow && order.status !== "RECEIVED" ? (
+                <ReceivePoButton
+                  id={order.id}
+                  lines={order.items.map((item) => ({ id: item.id, name: item.product.name, ordered: item.quantity }))}
+                />
+              ) : null}
             </article>
           );
         })}

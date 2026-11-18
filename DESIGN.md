@@ -34,14 +34,14 @@ Page background is `bg-parchment` plus two soft radial washes (brass top-left, p
 
 ## Typography
 
-- **Display** `font-display` (Fraunces): page titles `text-3xl`, panel titles `text-xl`, stat values `text-3xl`, login hero `text-5xl`. Always `text-pine-900` on light backgrounds.
+- **Display** `font-display` (Playfair Display, loaded with `next/font/google` in `app/layout.tsx`; don't add a `<link>` tag): page titles `text-3xl`, panel titles `text-xl`, stat values `text-3xl`, login hero `text-5xl`. Always `text-pine-900` on light backgrounds.
 - **Sans** `font-sans` (Outfit), the default: body `text-sm`.
 - **Eyebrow / label / table header**: `text-[11px] font-semibold uppercase tracking-[0.12em–0.18em] text-pine-700/70`.
 - **References** (invoice, Rx, order numbers): `font-mono text-xs`.
 
 ## Layout
 
-- **Shell** (`components/Shell.tsx`): 260px dark sidebar + content column (stacked below `lg`). The header is white at 70% with blur and holds the user name and role, global search, and Sign out. Main content is `px-6 py-6`.
+- **Shell** (`components/Shell.tsx`): dark sidebar + content column. On `lg`+ the sidebar is sticky and collapsible: 260px expanded, 76px icon rail collapsed (labels become `sr-only`, links get a `title` tooltip); the "Collapse menu" toggle sits at the bottom and the choice is remembered in localStorage. Below `lg` the sidebar is a top bar with a Menu/X button that opens the nav and closes on navigation. The header is white at 70% with blur and holds the user name and role, global search, and Sign out. Main content is `px-6 py-6`.
 - **Page** = `<PageHeader title description action? />`, then sections. Titles are short nouns ("Sales counter", "Wholesale orders"); the description is one plain sentence about what the page does.
 - **Panel**: `rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel`, with an optional `<h2 className="mb-3 font-display text-xl text-pine-900">`.
 - **Grids**: KPI rows use `grid gap-4 md:grid-cols-2 xl:grid-cols-4` (or `md:grid-cols-3`) of `<StatCard>`. A main list beside a side form/panel uses `grid gap-6 xl:grid-cols-[1.4fr_0.9fr]`, wider column first and stacked below `xl`.
@@ -55,8 +55,15 @@ Page background is `bg-parchment` plus two soft radial washes (brass top-left, p
 | KPI | `StatCard` (label, value, hint) |
 | Status pill | `Badge` with tone `neutral` / `good` / `warn` / `bad` / `brass`; for wholesale, `statusTone()` |
 | Table | `<table className="table-grid">` (header and cell styles come from globals.css) |
-| Buttons | `btn btn-primary` (one main action per form/panel), `btn btn-ghost` (secondary, Sign out) |
-| Inputs | Plain `<label>` + `<input>/<select>/<textarea>`, already styled globally; stack in `grid gap-3` |
+| Buttons | `btn btn-primary` (one main action per form/panel), `btn btn-ghost` (secondary, Sign out), `btn btn-danger` (rust; only for the final destructive action in a confirmation) |
+| Inputs | Plain `<label>` + `<input>/<select>/<textarea>`, already styled globally (selects get an inset pine chevron, no native arrow); link labels with `htmlFor`/`id`; stack in `grid gap-3`. Money inputs use `step="any"` so prices like 7.75215 are accepted |
+| Row actions | Icon-only ghost button (`rounded-lg p-2 text-pine-700 hover:bg-sage-100`, lucide `Pencil` etc.) with `aria-label` and `title`; editing is inline: the row's cells turn into compact inputs (`h-8 px-2 py-1 text-xs`, joined to one form via the `form` attribute) with Save / Cancel icon buttons, plus one row below asking for the reason (required). Esc cancels. Not a modal. A destructive row action uses the `Trash2` icon in `text-rust hover:bg-rust/10` |
+| Confirmation modal | Only for destructive actions (e.g. delete). Native `<dialog className="modal">` opened with `showModal()` (focus trap, Esc closes, backdrop click closes). Content: rust warning icon tile, Playfair title "Delete X?", plain-English consequence incl. the restore deadline, required reason `<textarea>`, an "I'm sure" checkbox; the `btn-danger` stays disabled until both are filled. Cancel is `btn-ghost` on the left |
+| Checkboxes | Globally styled (`h-4 w-4`, pine accent); pair with a sentence-case label using `normal-case tracking-normal font-normal` |
+| Report link | `btn btn-ghost` with an icon, e.g. `FileText` + "View report", in the last table column |
+| Downloads | `<a className="btn btn-ghost" download>` with `Download` icon; put them in the `PageHeader` action or the panel toolbar. Reports are CSV with a UTF-8 BOM; import templates are .xlsx |
+| Excel templates | Header row: required columns pine-800 fill with parchment text, optional columns sage-100 fill; frozen header; dates `dd/mm/yyyy`; dropdowns sourced from a hidden "Lists" sheet built from the same constants as the form; a "How to" sheet explains each column |
+| Labels in tables | Spell out flags rather than abbreviating (e.g. "Prescription: Required / Not required", not "Rx") |
 | Charts | `SalesChart` (area) / `MixChart` (horizontal bar): recharts, pine colors, faint grid, no legend clutter |
 | Icons | `lucide-react`, `h-4 w-4` inline, `h-5 w-5` in the brand mark |
 | Search | `HeaderSearch` / `SearchInput` / `SearchScope` |

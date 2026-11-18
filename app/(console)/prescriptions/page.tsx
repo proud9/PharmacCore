@@ -15,7 +15,7 @@ export default async function PrescriptionsPage() {
       orderBy: { createdAt: "desc" },
     }),
     db.patient.findMany({ orderBy: { lastName: "asc" } }),
-    db.product.findMany({ where: { requiresRx: true }, orderBy: { name: "asc" } }),
+    db.product.findMany({ where: { requiresRx: true, active: true }, orderBy: { name: "asc" } }),
   ]);
   const allow = Boolean(user && canDispense(user.role));
 

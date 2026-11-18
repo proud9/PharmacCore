@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -20,9 +21,15 @@ import {
   Warehouse,
   Building2,
   PackagePlus,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HeaderSearch } from "@/components/search/HeaderSearch";
+
+const COLLAPSE_KEY = "pharmacore:sidebar-collapsed";
 
 const RETAIL_NAV = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
@@ -80,6 +87,33 @@ export function Shell({
   const pathname = usePathname();
   const router = useRouter();
   const nav = navFor(roleCode);
+  // Desktop: collapsed to an icon rail (remembered per browser). Mobile: menu opens as a drawer.
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
+    } catch {
+      // Preference is a convenience only.
+    }
+  }, []);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  function toggleCollapsed() {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      } catch {
+        // Ignore storage being unavailable.
+      }
+      return next;
+    });
+  }
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -88,18 +122,42 @@ export function Shell({
   }
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
-      <aside className="bg-pine-950 text-parchment">
-        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brass text-pine-950">
+    <div
+      className={cn(
+        "min-h-screen lg:grid lg:transition-[grid-template-columns] lg:duration-200",
+        collapsed ? "lg:grid-cols-[76px_1fr]" : "lg:grid-cols-[260px_1fr]",
+      )}
+    >
+      <aside className="bg-pine-950 text-parchment lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+        <div
+          className={cn(
+            "flex items-center gap-3 border-b border-white/10 py-4 lg:py-5",
+            collapsed ? "px-5 lg:justify-center lg:px-0" : "px-5",
+          )}
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brass text-pine-950">
             <Pill className="h-5 w-5" />
           </div>
-          <div>
+          <div className={cn("min-w-0 flex-1", collapsed && "lg:hidden")}>
             <p className="font-display text-lg leading-none">Pharmacy</p>
-            <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-sage-300">{pharmacy}</p>
+            <p className="mt-1 truncate text-[11px] uppercase tracking-[0.18em] text-sage-300">{pharmacy}</p>
           </div>
+          <button
+            type="button"
+            className="rounded-lg p-2 text-sage-300 transition hover:bg-white/10 hover:text-white lg:hidden"
+            aria-expanded={mobileOpen}
+            aria-controls="side-menu"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            onClick={() => setMobileOpen((open) => !open)}
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
-        <nav className="space-y-0.5 p-3">
+        <nav
+          id="side-menu"
+          aria-label="Main"
+          className={cn("space-y-0.5 p-3 lg:block lg:flex-1 lg:overflow-y-auto", mobileOpen ? "block" : "hidden")}
+        >
           {nav.map((item) => {
             const active =
               pathname === item.href || (item.href !== "/portal" && pathname.startsWith(`${item.href}/`));
@@ -108,17 +166,35 @@ export function Shell({
               <Link
                 key={item.href}
                 href={item.href}
+                title={collapsed ? item.label : undefined}
+                aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition",
+                  collapsed && "lg:justify-center lg:px-0 lg:py-2.5",
                   active ? "bg-white/10 text-white" : "text-sage-300 hover:bg-white/5 hover:text-white",
                 )}
               >
-                <Icon className="h-4 w-4" />
-                {item.label}
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className={cn(collapsed && "lg:sr-only")}>{item.label}</span>
               </Link>
             );
           })}
         </nav>
+        <div className="hidden border-t border-white/10 p-3 lg:block">
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+            title={collapsed ? "Expand menu" : "Collapse menu"}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-sage-300 transition hover:bg-white/5 hover:text-white",
+              collapsed && "justify-center px-0",
+            )}
+          >
+            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            {collapsed ? null : <span>Collapse menu</span>}
+          </button>
+        </div>
       </aside>
       <div className="min-w-0">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-pine-900/10 bg-white/70 px-6 py-4 backdrop-blur">

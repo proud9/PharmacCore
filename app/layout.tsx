@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
-import { Fraunces, Outfit } from "next/font/google";
+import { Outfit, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
-const display = Fraunces({
+// Playfair Display (variable 400–900, roman + italic), self-hosted by next/font.
+const display = Playfair_Display({
   subsets: ["latin"],
+  style: ["normal", "italic"],
   variable: "--font-display",
 });
 

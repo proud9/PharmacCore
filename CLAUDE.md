@@ -34,6 +34,7 @@ When a request would push past this scope, say so and ask before building.
 | Validation | `zod` in every API route |
 | Styling | Tailwind CSS 3 with custom tokens; shared classes in `app/globals.css` |
 | Icons / charts / dates | `lucide-react`, `recharts`, `date-fns` |
+| Excel | `exceljs` (server only, `lib/xlsx.ts`): inventory import template and .xlsx uploads |
 
 ## Commands
 
@@ -54,18 +55,22 @@ There is no test suite and no linter configured. Check changes with `npx tsc --n
 
 ```
 app/
-  layout.tsx              Root: fonts (Fraunces display, Outfit sans), globals.css
+  layout.tsx              Root: fonts (Playfair Display display, Outfit sans, via next/font), globals.css
   page.tsx                Redirects to role home or /login
   login/page.tsx          Split-screen sign-in
   (console)/              Staff area; layout.tsx requires a user and wraps in <Shell>
     dashboard/            Home: KPIs, 14-day sales chart, low stock, expiring soon
     pos/                  Sales counter (components/pos/PosDesk.tsx)
-    inventory/, [id]/     Products, batches, expiry, receive stock
-    stock-take/           Count and reconcile (components/stock/StockTakeDesk.tsx)
+    inventory/            ALL item/stock additions and changes: delivery queue, Add item, CSV import,
+                          per-row edit (details + current stock) (components/inventory/)
+    inventory/[id]/       Product detail: batches, expiry, receive a batch
+    inventory/deleted/    Delete queue: deleted items, days left, Restore
+    stock-take/           Count only: close qty sheet + finish, recent takes (components/stock/StockSheet)
+    stock-take/[id]/      Stock take report (moved / all lines) with CSV downloads
     patients/             Patient records
     prescriptions/        Record + dispense
     sales/                Receipts
-    purchases/            Supplier purchase orders, receive
+    purchases/            Supplier purchase orders; "Receive delivery" records the supplier delivery note
     reports/              Analytics
     staff/                Users (ADMIN only)
     audit/                Activity log
@@ -79,8 +84,16 @@ app/
     orders/[id]/          Order tracking
   api/                    Route handlers (POST unless noted)
     auth/login, auth/logout
-    sales, patients, products, prescriptions, prescriptions/[id]/dispense
+    sales, patients, prescriptions, prescriptions/[id]/dispense
     stock/receive, stock-take, purchases/[id]/receive, staff
+    inventory/items       Add/update items from the Add item form (JSON), matched by stock code
+    inventory/import      Upload the Excel template (.xlsx) or a CSV; same rules via lib/items.ts
+    inventory/items/[id]  Inline edit: details, current stock, and the shown batch's no., entered and expiry; reason required (audited)
+    inventory/items/[id]/delete   Move to the delete queue (reason + confirm required)
+    inventory/items/[id]/restore  Restore from the delete queue
+    inventory/intake/[id]  Complete a queued delivery line: save details, add the batch
+    inventory/template (GET)  Excel import template (.xlsx) with Type/Prescription dropdowns
+    stock-take/[id]/report (GET)  Report CSV, ?show=moved|all
     wholesale/accounts, consignments, consignments/[id]/quote, consignments/[id]/status,
                           consignments/[id]/invoice, consignments/[id]/delivery
     pharmacy, pharmacy/logo (GET+POST)   Pharmacy details and logo (canWholesale)
@@ -89,12 +102,18 @@ components/
   Shell.tsx               Sidebar + header; role-based nav lives here
   PageHeader, StatCard, Badge, SalesChart, MixChart
   documents/              TradeDocument, InvoiceSheet, CompanyMark, DocumentFrame, PrintButton
-  forms/, pos/, stock/, search/, wholesale/   Client components per feature
+  inventory/              InventoryTable (add, CSV, row edit), EditItemRow, IntakeQueue, SheetLineFields
+  stock/                  StockSheet (close qty count + finish only)
+  forms/, pos/, search/, wholesale/   Client components per feature
 lib/
   auth.ts                 Session sign/read/cookie, requireUser(), role guards
   paths.ts                homePath(role)
   utils.ts                cn(), money(), ref(), stockOf(), ROLES, ROLE_LABEL
-  inventory.ts            onHand(), deductStock(tx, ...) (FEFO), receiveBatch(), expiryWindow() (90 days)
+  stocksheet.ts           Item/sheet rules: OTC/DDA, RX_OPTIONS, IMPORT_COLUMNS, CSV/table parser, csvCell, zod schemas (client-safe, no db)
+  items.ts                saveItems(): shared add/update logic for the form and file imports
+  deletion.ts             Delete queue: RETENTION_DAYS (30), purgeExpiredDeletions(), daysLeft()
+  xlsx.ts                 buildItemsTemplate(), readItemsWorkbook() (server only)
+  inventory.ts            onHand(), deductStock(tx, ...) (FEFO), setStockLevel(tx, ...), receiveBatch(), expiryWindow() (90 days)
   documents.ts            Helpers for printable trade documents
   wholesale.ts            Consignment statuses, labels, statusTone(), adminNextStatuses()
   audit.ts                audit() writes AuditLog
@@ -108,7 +127,13 @@ scripts/rename-pharmacy.ts  One-off: resets pharmacy name
 
 - **User** — staff or buyer; `role` is a string from `ROLES`; buyers link to an **Institution**.
 - **Product** → many **Batch** (lot, expiry, quantity). Stock on hand = sum of batch quantities; there is no stock column on Product.
-- **Sale** → SaleItem; **Prescription** → PrescriptionItem (status PENDING → DISPENSED); **PurchaseOrder** → PurchaseOrderItem (receiving creates batches); **StockTake** → StockTakeItem (variance).
+- **Sale** → SaleItem; **Prescription** → PrescriptionItem (status PENDING → DISPENSED); **PurchaseOrder** → PurchaseOrderItem; **StockTake** → StockTakeItem (`systemQty` = open qty, `countedQty` = close qty, `unitPrice` snapshot).
+- **Page responsibilities:** Inventory is the only place items or stock are added or changed (new items, CSV import, delivery queue, row edits, receiving a batch). Stock take only records close qty, finishes counts and shows reports. Don't add item or stock-entry controls to Stock take.
+- **Deleting items:** never hard-delete a Product directly. Delete sets `active=false` + `deletedAt` (delete queue). `purgeExpiredDeletions()` runs when Inventory or the queue loads (there is no scheduler): after 30 days it erases items with no history, and locks items with history (`purgedAt`, sku suffixed `~DEL-xxxxxx`, batches removed) so receipts and reports keep working. Show codes in history with `displayCode()`. Any new product list must filter `active: true`.
+- **Dropdown values live in one place:** `DRUG_TYPES` and `RX_OPTIONS` in `lib/stocksheet.ts` feed both the site form selects and the Excel template's dropdowns; `IMPORT_COLUMNS` defines the template columns. Change them there, not in the template or the form.
+- **Inventory batch columns:** "Batch no." (`lotNumber`, with "+N more" linking to the product page), "Entered" (`receivedAt`) and "Expiry" all describe the same batch (the earliest-expiring batch with stock). Opening stock from the form/import uses the given Entered date (default today).
+- **StockIntake** — a delivered supplier line waiting in Inventory (`PENDING` → `DONE`). Receiving a purchase order stores the supplier `deliveryNoteNo` and creates intakes; **no stock is added until the intake is completed** with expiry/price, which creates the Batch.
+- Stock sheet columns map to Product: stock code = `sku`, category no. = `categoryNo`, description = `name`, type DDA = `controlled` (else OTC), unit sale = `unit`, price = `sellingPrice`; expiry = earliest batch with stock. Sold = open − close; amount = sold × price. Finishing a take sets stock to the close qty.
 - **Consignment** (wholesale order) → ConsignmentItem + ConsignmentEvent (status history).
 - **AuditLog**, **Pharmacy** (single row `main`, currency `ZMW`), **Supplier**, **Category**, **Patient**.
 

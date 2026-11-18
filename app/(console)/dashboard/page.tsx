@@ -10,7 +10,7 @@ import { expiryWindow } from "@/lib/inventory";
 export default async function DashboardPage() {
   const today = startOfDay(new Date());
   const [products, sales, pendingRx, patients, pharmacy] = await Promise.all([
-    db.product.findMany({ include: { batches: true, category: true } }),
+    db.product.findMany({ where: { active: true }, include: { batches: true, category: true } }),
     db.sale.findMany({
       where: { createdAt: { gte: subDays(today, 13) } },
       include: { items: true },
