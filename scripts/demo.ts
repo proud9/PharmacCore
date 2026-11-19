@@ -5,7 +5,7 @@
  *   npm run demo              start (creates an empty installation the first time)
  *   npm run demo -- --reset   wipe the demo and start again from an empty installation
  *   npm run demo -- --seed    start from the demo data instead (sample stock, orders, logins)
- *   npm run demo -- --build   rebuild first (after code changes)
+ *   npm run demo -- --build   force a rebuild (it rebuilds by itself when the code has changed)
  *   npm run demo -- --port 8080
  *
  * The first person to open it on an empty installation sets up the wholesale at /setup.
@@ -14,6 +14,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, rmSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import path from "node:path";
+import { ensureProdBuild } from "./prod-build";
 
 const ROOT = path.resolve(__dirname, "..");
 const NODE = process.execPath;
@@ -23,7 +24,8 @@ const portArg = args.indexOf("--port");
 const port = portArg >= 0 ? Number(args[portArg + 1]) : 3000;
 const DB_FILE = "demo.db";
 const dbPath = path.join(ROOT, "prisma", DB_FILE);
-const env = { ...process.env, DATABASE_URL: `file:./${DB_FILE}`, COOKIE_SECURE: "false", NODE_ENV: "production" as const };
+const DIST_DIR = ".next-demo";
+const env = { ...process.env, DATABASE_URL: `file:./${DB_FILE}`, COOKIE_SECURE: "false", NODE_ENV: "production" as const, NEXT_DIST_DIR: DIST_DIR };
 
 function run(label: string, cmd: string[]) {
   console.log(`• ${label}`);
@@ -38,9 +40,8 @@ if (!existsSync(dbPath)) {
   run("Creating the demo database (prisma/demo.db)", [bin("prisma", "build", "index.js"), "db", "push", "--skip-generate"]);
   if (args.includes("--seed")) run("Loading demo data", [bin("tsx", "dist", "cli.mjs"), "prisma/seed.ts"]);
 }
-if (args.includes("--build") || !existsSync(path.join(ROOT, ".next", "BUILD_ID"))) {
-  run("Building the app", [bin("next", "dist", "bin", "next"), "build"]);
-}
+// Its own build folder, rebuilt when the code changes; `npm run dev` can't break it.
+ensureProdBuild(DIST_DIR, args.includes("--build"));
 
 const addresses = Object.values(networkInterfaces())
   .flat()
@@ -58,4 +59,10 @@ console.log("Keep this window open. Press Ctrl+C to stop.\n");
 if (process.platform === "darwin") spawn("caffeinate", ["-i", "-w", String(server.pid)], { stdio: "ignore" });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => server.kill(signal));
-server.on("exit", (code) => process.exit(code ?? 0));
+server.on("exit", (code, signal) => {
+  if (code && !signal) {
+    console.error(`\nThe demo server stopped (exit code ${code}). If the message above mentions the build, run: npm run demo -- --build`);
+    console.error(`If it says the port is in use, close the other server or run: npm run demo -- --port 3001`);
+  }
+  process.exit(code ?? 0);
+});

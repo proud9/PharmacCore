@@ -47,6 +47,18 @@ Production sign-in cookies are HTTPS-only. To use `npm start` over plain HTTP on
 
 `npm run setup` creates or updates the local database and seeds demonstration data. Seeding resets the demo database; do not use it against production data.
 
+## Account types and how each is created
+
+| Account | Who creates it | Where | Signs in to |
+| --- | --- | --- | --- |
+| **Administrator** (the wholesale's owner) | The wholesaler, once per installation | `/setup`: the landing page's "Create an account" goes there until the wholesale exists. More administrators: an administrator, under **Staff** | Home dashboard |
+| **Finance** | An administrator | **Staff** → Add staff, role Finance | Payments |
+| **Sales** | An administrator | **Staff** → Add staff, role Sales | Wholesale orders |
+| **Client** (pharmacy, clinic, hospital, school) | The client themselves, or Sales | Landing page "Create an account" once the wholesale is set up; or **Buyers** → Create buyer account | My orders (client portal) |
+| **Manufacturer** | Sales | **Purchases** → **Manufacturers**: add the manufacturer with a login (or add a login later) | Its own purchase orders (manufacturer portal) |
+
+The landing page sign-up only ever creates client accounts, which is why it asks for an organisation type. A wholesale account comes from `/setup` on an empty installation, and an installation belongs to one wholesale.
+
 ## Demo on a local network
 
 Run Parallax on this computer and let other computers on the same Wi-Fi or office network use it:

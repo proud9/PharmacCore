@@ -7,6 +7,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
+import { ensureProdBuild } from "../prod-build";
 
 export const ROOT = path.resolve(__dirname, "..", "..");
 const NODE = process.execPath;
@@ -157,17 +158,17 @@ export function freshDatabase(file: string, seed: boolean) {
   return new PrismaClient({ datasourceUrl: `file:${target}` });
 }
 
+const DIST_DIR = ".next-test";
+
+/** Builds into .next-test when it is missing or older than the code (see scripts/prod-build.ts). */
 export function ensureBuild(force: boolean) {
-  if (!force && existsSync(path.join(ROOT, ".next", "BUILD_ID"))) return;
-  console.log("Building the app (npm run build)…");
-  const build = spawnSync(NODE, [NEXT_BIN, "build"], { cwd: ROOT, stdio: "inherit" });
-  if (build.status !== 0) throw new Error("Build failed");
+  ensureProdBuild(DIST_DIR, force);
 }
 
 export async function startServer(file: string, port: number): Promise<ChildProcess> {
   const server = spawn(NODE, [NEXT_BIN, "start", "-p", String(port)], {
     cwd: ROOT,
-    env: { ...process.env, DATABASE_URL: `file:./${file}`, COOKIE_SECURE: "false", NODE_ENV: "production" },
+    env: { ...process.env, DATABASE_URL: `file:./${file}`, COOKIE_SECURE: "false", NODE_ENV: "production", NEXT_DIST_DIR: DIST_DIR },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let log = "";
