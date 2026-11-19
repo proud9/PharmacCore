@@ -4,8 +4,38 @@
     {
       "name": "pharmacore-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "parallax-setup-test",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "DATABASE_URL=file:./setup-test.db npm run dev"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "parallax-prod",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "COOKIE_SECURE=false npx next start -p 3100"
+      ],
+      "port": 3100
+    },
+    {
+      "name": "parallax-test",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "DATABASE_URL=file:./test-workflow.db COOKIE_SECURE=false npx next start -p 3200"
+      ],
+      "port": 3200
     }
   ]
 }

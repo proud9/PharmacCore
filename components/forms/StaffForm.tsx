@@ -48,13 +48,10 @@ export function StaffForm() {
         </div>
         <div>
           <label>Role</label>
-          <select name="role" defaultValue="CASHIER">
-            <option value="ADMIN">Administrator</option>
-            <option value="WHOLESALE_ADMIN">Wholesale administrator</option>
-            <option value="PHARMACIST">Pharmacist</option>
-            <option value="TECHNICIAN">Technician</option>
-            <option value="CASHIER">Cashier</option>
-            <option value="INVENTORY">Inventory officer</option>
+          <select name="role" defaultValue="SALES">
+            <option value="SALES">Sales: stock intake, sales counter, buyers, orders</option>
+            <option value="FINANCE">Finance: quotations, invoices, payments, reports</option>
+            <option value="ADMIN">Administrator: everything</option>
           </select>
         </div>
       </div>

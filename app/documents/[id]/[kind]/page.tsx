@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { DocumentFrame } from "@/components/documents/DocumentFrame";
 import { TradeDocument } from "@/components/documents/TradeDocument";
-import { canWholesale, isBuyer, requireUser } from "@/lib/auth";
+import { isStaff, isBuyer, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getPharmacy } from "@/lib/pharmacy";
 import { DELIVERY_STATUSES, QUOTE_STATUSES } from "@/lib/documents";
 
 const KINDS = ["quotation", "invoice", "delivery"] as const;
@@ -26,13 +27,13 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
   });
   if (!order) notFound();
   if (isBuyer(user.role) && order.institutionId !== user.institutionId) notFound();
-  if (!isBuyer(user.role) && !canWholesale(user.role)) notFound();
+  if (!isBuyer(user.role) && !isStaff(user.role)) notFound();
 
   if (documentKind === "quotation" && !QUOTE_STATUSES.includes(order.status)) notFound();
   if (documentKind === "invoice" && !order.invoiceNo) notFound();
   if (documentKind === "delivery" && (!order.deliveryNoteNo || !DELIVERY_STATUSES.includes(order.status))) notFound();
 
-  const pharmacy = await db.pharmacy.findUnique({ where: { id: "main" } });
+  const pharmacy = await getPharmacy();
   if (!pharmacy) notFound();
 
   const back = isBuyer(user.role) ? `/portal/orders/${order.id}` : `/wholesale/${order.id}`;

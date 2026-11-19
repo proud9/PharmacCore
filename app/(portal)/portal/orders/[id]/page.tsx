@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { format } from "date-fns";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getPharmacy } from "@/lib/pharmacy";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { OrderTrack } from "@/components/wholesale/OrderTrack";
@@ -23,6 +24,17 @@ export default async function BuyerOrderPage({ params }: { params: Promise<{ id:
   });
   if (!order || order.institutionId !== user.institutionId) notFound();
   const totals = documentTotals(order.items, order.taxRate, order.quotedAmount);
+  const pharmacy = order.invoiceNo ? await getPharmacy() : null;
+  const balance = order.quotedAmount != null ? order.quotedAmount - order.amountPaid : 0;
+  const bank = pharmacy
+    ? [
+        ["Bank", pharmacy.bankName],
+        ["Account name", pharmacy.accountName],
+        ["Account number", pharmacy.accountNumber],
+        ["Branch", pharmacy.bankBranch],
+        ["SWIFT code", pharmacy.swiftCode],
+      ].filter((row): row is [string, string] => Boolean(row[1]))
+    : [];
 
   const buyerOptions =
     order.status === "QUOTED"
@@ -62,6 +74,34 @@ export default async function BuyerOrderPage({ params }: { params: Promise<{ id:
         <section className="mb-6 rounded-2xl border border-brass/40 bg-white p-5 shadow-panel">
           <p className="text-[11px] uppercase tracking-[0.14em] text-pine-700/70">Message from wholesale</p>
           <p className="mt-2 text-sm">{order.adminMessage}</p>
+        </section>
+      ) : null}
+      {order.invoiceNo && order.quotedAmount != null ? (
+        <section className="mb-6 rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
+          <h2 className="font-display text-xl text-pine-900">Payment</h2>
+          <p className="mt-2 text-sm">
+            Invoice {order.invoiceNo} · paid {zmw(order.amountPaid)} of {zmw(order.quotedAmount)}
+            {order.dueOn ? ` · due ${format(order.dueOn, "dd MMM yyyy")}` : ""}
+          </p>
+          <p className="mt-1 font-semibold text-pine-900">
+            {balance > 0.005 ? `Balance to pay: ${zmw(balance)}` : "Paid in full. Thank you."}
+          </p>
+          {balance > 0.005 ? (
+            bank.length > 0 ? (
+              <dl className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+                {bank.map(([label, value]) => (
+                  <div key={label} className="contents">
+                    <dt className="text-ink/60">{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+                <dt className="text-ink/60">Reference</dt>
+                <dd className="font-mono">{order.invoiceNo}</dd>
+              </dl>
+            ) : (
+              <p className="mt-2 text-sm text-ink/60">Bank details are on the invoice, or ask the wholesale.</p>
+            )
+          ) : null}
         </section>
       ) : null}
       <div className="grid gap-6 xl:grid-cols-2">

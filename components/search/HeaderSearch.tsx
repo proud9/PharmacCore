@@ -6,7 +6,7 @@ import { SearchInput } from "./SearchInput";
 
 type Hit = { href: string; title: string; detail: string; group: string };
 
-export function HeaderSearch() {
+export function HeaderSearch({ placeholder = "Search…" }: { placeholder?: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -45,7 +45,7 @@ export function HeaderSearch() {
 
   return (
     <div ref={boxRef} className="relative mx-auto w-full max-w-lg">
-      <SearchInput value={query} onChange={setQuery} placeholder="Search products, patients, orders…" />
+      <SearchInput value={query} onChange={setQuery} placeholder={placeholder} />
       {open && query.trim().length >= 2 ? (
         <div className="absolute z-30 mt-1 max-h-80 w-full overflow-auto rounded-xl border border-pine-900/10 bg-white py-1 shadow-panel">
           {hits.length === 0 ? (

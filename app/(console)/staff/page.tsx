@@ -1,4 +1,6 @@
 import { format } from "date-fns";
+import { redirect } from "next/navigation";
+import { homePath } from "@/lib/paths";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
@@ -9,6 +11,8 @@ import { SearchScope } from "@/components/search/SearchScope";
 
 export default async function StaffPage() {
   const user = await requireUser();
+  // Only administrators manage staff; others don't see the list of everyone's sign-in emails.
+  if (!user || !canManageStaff(user.role)) redirect(homePath(user?.role ?? ""));
   const staff = await db.user.findMany({ orderBy: { name: "asc" } });
   const allow = Boolean(user && canManageStaff(user.role));
 

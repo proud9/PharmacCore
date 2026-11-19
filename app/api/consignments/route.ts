@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       events: {
         create: {
           status: "REQUESTED",
-          message: "Consignment request submitted",
+          message: "Order request sent",
           actorName: user.name,
         },
       },

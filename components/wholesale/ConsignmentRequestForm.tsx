@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLookup } from "@/components/search/useLookup";
 
 type Product = {
   id: string;
@@ -11,20 +12,15 @@ type Product = {
   form: string | null;
 };
 
-export function ConsignmentRequestForm({ products }: { products: Product[] }) {
+/** Products are searched on the server as the buyer types (see /api/lookup). */
+export function ConsignmentRequestForm() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("ALL");
   const [lines, setLines] = useState<{ productId: string; name: string; quantity: number }[]>([]);
   const [error, setError] = useState("");
 
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return products
-      .filter((p) => (kind === "ALL" ? true : p.kind === kind))
-      .filter((p) => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
-      .slice(0, 10);
-  }, [products, query, kind]);
+  const { results: matches, loading } = useLookup<Product>("products", query, kind === "ALL" ? {} : { type: kind });
 
   function add(product: Product) {
     setLines((current) => {
@@ -97,6 +93,9 @@ export function ConsignmentRequestForm({ products }: { products: Product[] }) {
               <span className="text-xs uppercase tracking-wide text-pine-700">Add</span>
             </button>
           ))}
+          {!loading && matches.length === 0 ? (
+            <p className="py-3 text-sm text-ink/60">{query.trim() ? "No products match." : "No products listed yet."}</p>
+          ) : null}
         </div>
       </section>
       <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">

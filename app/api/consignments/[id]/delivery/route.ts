@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canWholesale, requireUser } from "@/lib/auth";
+import { canSell, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { DELIVERY_STATUSES } from "@/lib/documents";
@@ -24,8 +24,8 @@ const schema = z.object({
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
-  if (!user || !canWholesale(user.role)) {
-    return NextResponse.json({ error: "Wholesale administrators only." }, { status: 403 });
+  if (!user || !canSell(user.role)) {
+    return NextResponse.json({ error: "Only sales staff can issue delivery notes." }, { status: 403 });
   }
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -38,6 +38,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
   if (!existing || !DELIVERY_STATUSES.includes(existing.status)) {
     return NextResponse.json({ error: "A delivery note is available once the order is being prepared." }, { status: 400 });
+  }
+  // Dispatch takes these quantities off stock, so the note is fixed from then on.
+  if (existing.status === "DISPATCHED" || existing.status === "DELIVERED") {
+    return NextResponse.json({ error: "The delivery note can't change after the order has been dispatched." }, { status: 400 });
   }
   const known = new Map(existing.items.map((item) => [item.id, item]));
   if (parsed.data.lines.some((line) => !known.has(line.id))) {

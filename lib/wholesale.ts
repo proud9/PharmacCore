@@ -22,11 +22,23 @@ export const STATUS_LABEL: Record<string, string> = {
   CANCELLED: "Cancelled",
 };
 
+/** Replaces status codes in free text (order history, activity log) with their labels. */
+export function plainStatus(text: string | null) {
+  if (!text) return "";
+  return text.replace(/\b(REQUESTED|QUOTED|ACCEPTED|PREPARING|READY|DISPATCHED|DELIVERED|DECLINED|CANCELLED)\b/g, (code) => STATUS_LABEL[code] ?? code)
+    .replace(/\bConsignment request submitted\b/g, "Order request sent")
+    .replace(/\bStatus set to\b/g, "Moved to");
+}
+
 export const KIND_LABEL: Record<string, string> = {
   HOSPITAL: "Hospital",
   CLINIC: "Clinic",
   PHARMACY: "Pharmacy",
+  SCHOOL: "School",
 };
+
+/** Client types, in the order shown in forms. */
+export const INSTITUTION_KINDS = ["HOSPITAL", "CLINIC", "PHARMACY", "SCHOOL"] as const;
 
 export function statusTone(status: string): "neutral" | "good" | "warn" | "bad" | "brass" {
   if (status === "DELIVERED" || status === "ACCEPTED" || status === "READY") return "good";

@@ -1,47 +1,48 @@
 import { format, startOfDay, subDays } from "date-fns";
+import { redirect } from "next/navigation";
+import { canFinance, requireUser } from "@/lib/auth";
+import { homePath } from "@/lib/paths";
 import { db } from "@/lib/db";
+import { getPharmacy } from "@/lib/pharmacy";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
-import { money, stockOf } from "@/lib/utils";
-import { MixChart } from "@/components/MixChart";
+import { money } from "@/lib/utils";
+import { MixChart } from "@/components/charts";
 
 export default async function ReportsPage() {
-  const pharmacy = await db.pharmacy.findUnique({ where: { id: "main" } });
+  const user = await requireUser();
+  if (!user || !canFinance(user.role)) redirect(homePath(user?.role ?? ""));
+  const pharmacy = await getPharmacy();
   const currency = pharmacy?.currency ?? "ZMW";
   const since = subDays(startOfDay(new Date()), 30);
-  const [sales, products] = await Promise.all([
-    db.sale.findMany({
-      where: { createdAt: { gte: since } },
-      include: { items: { include: { product: true } } },
-    }),
-    db.product.findMany({ include: { batches: true } }),
+  const inWindow = { createdAt: { gte: since } };
+  // All totals are worked out by the database; only the top sellers' names are loaded.
+  const [revenueRow, byPayment, byProduct, stockRows] = await Promise.all([
+    db.sale.aggregate({ where: inWindow, _sum: { total: true }, _count: true }),
+    db.sale.groupBy({ by: ["payment"], where: inWindow, _sum: { total: true } }),
+    db.saleItem.groupBy({ by: ["productId"], where: { sale: inWindow }, _sum: { total: true, quantity: true } }),
+    db.batch.groupBy({ by: ["productId"], where: { quantity: { gt: 0 }, product: { active: true } }, _sum: { quantity: true } }),
   ]);
+  const costIds = [...new Set([...byProduct.map((r) => r.productId), ...stockRows.map((r) => r.productId)])];
+  const products = await db.product.findMany({
+    where: { id: { in: costIds } },
+    select: { id: true, name: true, costPrice: true },
+  });
+  const byId = new Map(products.map((p) => [p.id, p]));
 
-  const revenue = sales.reduce((sum, s) => sum + s.total, 0);
-  const cogsMap = new Map(products.map((p) => [p.id, p.costPrice]));
-  const cogs = sales.reduce(
-    (sum, sale) =>
-      sum + sale.items.reduce((lineSum, item) => lineSum + (cogsMap.get(item.productId) ?? 0) * item.quantity, 0),
-    0,
-  );
-  const stockValue = products
-    .filter((p) => p.active)
-    .reduce((sum, p) => sum + stockOf(p.batches) * p.costPrice, 0);
+  const revenue = revenueRow._sum.total ?? 0;
+  const invoiceCount = revenueRow._count;
+  const cogs = byProduct.reduce((sum, r) => sum + (byId.get(r.productId)?.costPrice ?? 0) * (r._sum.quantity ?? 0), 0);
+  const stockValue = stockRows.reduce((sum, r) => sum + (byId.get(r.productId)?.costPrice ?? 0) * (r._sum.quantity ?? 0), 0);
 
-  const mix = new Map<string, number>();
-  for (const sale of sales) {
-    for (const item of sale.items) {
-      mix.set(item.product.name, (mix.get(item.product.name) ?? 0) + item.total);
-    }
-  }
-  const mixData = [...mix.entries()]
-    .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
-    .sort((a, b) => b.value - a.value)
+  const mixData = byProduct
+    .map((r) => ({ name: byId.get(r.productId)?.name ?? "Unknown item", value: Number((r._sum.total ?? 0).toFixed(2)) }))
+    .sort((x, y) => y.value - x.value)
     .slice(0, 8);
 
   const tender = { CASH: 0, CARD: 0, MOBILE: 0, INSURANCE: 0 };
-  for (const sale of sales) {
-    tender[sale.payment as keyof typeof tender] += sale.total;
+  for (const row of byPayment) {
+    if (row.payment in tender) tender[row.payment as keyof typeof tender] = row._sum.total ?? 0;
   }
 
   return (
@@ -51,7 +52,7 @@ export default async function ReportsPage() {
         description="Sales, estimated cost, profit margin, and the value of stock on hand for the last 30 days."
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Revenue (30d)" value={money(revenue, currency)} hint={`${sales.length} invoices`} />
+        <StatCard label="Revenue (30d)" value={money(revenue, currency)} hint={`${invoiceCount} invoices`} />
         <StatCard label="Estimated cost of goods" value={money(cogs, currency)} hint="Using current cost prices" />
         <StatCard
           label="Gross margin"

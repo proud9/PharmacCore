@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { ArrowLeft, Download } from "lucide-react";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { paging } from "@/lib/paging";
+import { Pagination } from "@/components/Pagination";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/Badge";
@@ -15,30 +18,46 @@ export default async function StockTakeReportPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ show?: string }>;
+  searchParams: Promise<{ show?: string; page?: string }>;
 }) {
-  const [{ id }, { show }] = await Promise.all([params, searchParams]);
-  const take = await db.stockTake.findUnique({
-    where: { id },
-    include: { user: true, items: { include: { product: true } } },
-  });
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const take = await db.stockTake.findUnique({ where: { id }, include: { user: true } });
   if (!take) notFound();
 
-  const lines = take.items
-    .map((item) => {
-      const sold = item.systemQty - item.countedQty;
-      return { item, sold, amount: sold * item.unitPrice };
-    })
-    .sort((a, b) => a.item.product.sku.localeCompare(b.item.product.sku));
-  const soldLines = lines.filter((line) => line.sold > 0);
-  const surplusLines = lines.filter((line) => line.sold < 0);
-  const showAll = show === "all";
-  const visible = showAll ? lines : lines.filter((line) => line.sold !== 0);
+  // Totals come from the database; the table shows one page of lines (a take has a line per item).
+  const [stats] = await db.$queryRaw<
+    { total: bigint | number; soldCount: bigint | number; surplusCount: bigint | number; unitsSold: number | null; soldAmount: number | null; netAmount: number | null }[]
+  >(Prisma.sql`
+    SELECT COUNT(*) AS total,
+      SUM(CASE WHEN systemQty > countedQty THEN 1 ELSE 0 END) AS soldCount,
+      SUM(CASE WHEN systemQty < countedQty THEN 1 ELSE 0 END) AS surplusCount,
+      SUM(CASE WHEN systemQty > countedQty THEN systemQty - countedQty ELSE 0 END) AS unitsSold,
+      SUM(CASE WHEN systemQty > countedQty THEN (systemQty - countedQty) * unitPrice ELSE 0 END) AS soldAmount,
+      SUM((systemQty - countedQty) * unitPrice) AS netAmount
+    FROM StockTakeItem WHERE stockTakeId = ${id}`);
+  const totalLines = Number(stats?.total ?? 0);
+  const soldCount = Number(stats?.soldCount ?? 0);
+  const surplusCount = Number(stats?.surplusCount ?? 0);
+  const movedCount = soldCount + surplusCount;
+  const unitsSold = Number(stats?.unitsSold ?? 0);
+  const soldAmount = Number(stats?.soldAmount ?? 0);
+  const totalAmount = Number(stats?.netAmount ?? 0);
 
-  const totalAmount = lines.reduce((sum, line) => sum + line.amount, 0);
-  const soldAmount = soldLines.reduce((sum, line) => sum + line.amount, 0);
-  const unitsSold = soldLines.reduce((sum, line) => sum + line.sold, 0);
-  const visibleTotal = visible.reduce((sum, line) => sum + line.amount, 0);
+  const showAll = query.show === "all";
+  const { page, take: pageTake, skip, pageSize } = paging(query, 100);
+  const items = await db.stockTakeItem.findMany({
+    where: { stockTakeId: id, ...(showAll ? {} : { variance: { not: 0 } }) },
+    include: { product: true },
+    orderBy: { product: { sku: "asc" } },
+    take: pageTake,
+    skip,
+  });
+  const visible = items.map((item) => {
+    const sold = item.systemQty - item.countedQty;
+    return { item, sold, amount: sold * item.unitPrice };
+  });
+  // Unchanged lines add nothing, so both views share the same total.
+  const visibleTotal = totalAmount;
 
   return (
     <div>
@@ -67,13 +86,13 @@ export default async function StockTakeReportPage({
       />
 
       <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Sold amount" value={money(soldAmount)} hint={`${unitsSold} units across ${soldLines.length} items`} />
+        <StatCard label="Sold amount" value={money(soldAmount)} hint={`${unitsSold} units across ${soldCount} items`} />
         <StatCard label="Net amount" value={money(totalAmount)} hint="Sold amount less any surplus counted" />
-        <StatCard label="Items counted" value={String(lines.length)} hint={`${lines.length - soldLines.length - surplusLines.length} unchanged`} />
+        <StatCard label="Items counted" value={totalLines.toLocaleString()} hint={`${(totalLines - movedCount).toLocaleString()} unchanged`} />
         <StatCard
           label="Surplus items"
-          value={String(surplusLines.length)}
-          hint={surplusLines.length ? "Counted more than the system held" : "None"}
+          value={String(surplusCount)}
+          hint={surplusCount ? "Counted more than the system held" : "None"}
         />
       </div>
 
@@ -85,13 +104,13 @@ export default async function StockTakeReportPage({
               href={`/stock-take/${take.id}`}
               className={cn("btn", showAll ? "btn-ghost" : "btn-primary")}
             >
-              Moved ({lines.filter((line) => line.sold !== 0).length})
+              Moved ({movedCount.toLocaleString()})
             </Link>
             <Link
               href={`/stock-take/${take.id}?show=all`}
               className={cn("btn", showAll ? "btn-primary" : "btn-ghost")}
             >
-              All lines ({lines.length})
+              All lines ({totalLines.toLocaleString()})
             </Link>
           </div>
         </div>
@@ -117,7 +136,7 @@ export default async function StockTakeReportPage({
                 const type = drugTypeOf(item.product.controlled);
                 return (
                   <tr key={item.id}>
-                    <td className="text-ink/50">{index + 1}</td>
+                    <td className="text-ink/50">{skip + index + 1}</td>
                     <td className="whitespace-nowrap font-mono text-xs">{displayCode(item.product.sku)}</td>
                     <td>{item.product.categoryNo ?? "—"}</td>
                     <td>{item.product.name}</td>
@@ -136,7 +155,9 @@ export default async function StockTakeReportPage({
               {visible.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="py-6 text-center text-ink/60">
-                    Nothing moved in this count. Every item closed at its open qty.
+                    {showAll || movedCount === 0
+                      ? "Nothing moved in this count. Every item closed at its open qty."
+                      : "No lines on this page."}
                   </td>
                 </tr>
               ) : null}
@@ -153,6 +174,13 @@ export default async function StockTakeReportPage({
             </tfoot>
           </table>
         </div>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={showAll ? totalLines : movedCount}
+          basePath={`/stock-take/${take.id}`}
+          params={{ show: showAll ? "all" : undefined, page: query.page }}
+        />
         <p className="mt-2 text-xs text-ink/60">
           Sold = open qty − close qty, valued at the price on the day of the count. Negative (red) lines are surplus.
         </p>

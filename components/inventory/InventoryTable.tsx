@@ -10,6 +10,7 @@ import { DeleteItemDialog } from "@/components/inventory/DeleteItemDialog";
 import { LineDefaults, SheetLineFields, readLineFields } from "@/components/inventory/SheetLineFields";
 import type { DrugType } from "@/lib/stocksheet";
 import { cn, money } from "@/lib/utils";
+import { ListFilter, ListSearch } from "@/components/search/ListSearch";
 
 export type InventoryRow = {
   id: string;
@@ -45,10 +46,22 @@ const COLUMNS = 14;
  * Inventory list in the stock sheet layout. This is where items are added (form or CSV)
  * and edited, including their current stock.
  */
-export function InventoryTable({ rows, canEdit }: { rows: InventoryRow[]; canEdit: boolean }) {
+export function InventoryTable({
+  rows,
+  canEdit,
+  total,
+  offset,
+  pager,
+}: {
+  rows: InventoryRow[];
+  canEdit: boolean;
+  /** All matching items (the table shows one page of them). */
+  total: number;
+  /** Row number of the first row on this page, minus one. */
+  offset: number;
+  pager?: React.ReactNode;
+}) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"ALL" | DrugType>("ALL");
   const [formOpen, setFormOpen] = useState(false);
   const [prefill, setPrefill] = useState<{ key: number; values: LineDefaults }>({ key: 0, values: {} });
   const [formError, setFormError] = useState("");
@@ -60,12 +73,8 @@ export function InventoryTable({ rows, canEdit }: { rows: InventoryRow[]; canEdi
   const fileInput = useRef<HTMLInputElement>(null);
 
   const bySku = useMemo(() => new Map(rows.map((row) => [row.sku.toUpperCase(), row])), [rows]);
-  const needle = query.trim().toLowerCase();
-  const visible = rows.filter(
-    (row) =>
-      (typeFilter === "ALL" || row.type === typeFilter) &&
-      (!needle || `${row.sku} ${row.name} ${row.categoryNo ?? ""} ${row.batchNo ?? ""}`.toLowerCase().includes(needle)),
-  );
+  // Search and type filtering happen on the server (URL ?q= and ?type=); rows is one page.
+  const visible = rows;
   const columns = canEdit ? COLUMNS : COLUMNS - 1;
 
   async function sendItems(payload: { row: number; input: Record<string, unknown> }[]) {
@@ -162,7 +171,7 @@ export function InventoryTable({ rows, canEdit }: { rows: InventoryRow[]; canEdi
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-display text-xl text-pine-900">Items</h2>
-          <p className="text-sm text-ink/70">{rows.length} items</p>
+          <p className="text-sm text-ink/70">{total.toLocaleString()} items</p>
         </div>
         {canEdit ? (
           <div className="flex flex-wrap gap-2">
@@ -231,25 +240,20 @@ export function InventoryTable({ rows, canEdit }: { rows: InventoryRow[]; canEdi
 
       <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px]">
         <div>
-          <label htmlFor="inventory-search">Search</label>
-          <input
-            id="inventory-search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Code, description, category or batch no."
-          />
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-pine-700/80">Search</span>
+          <ListSearch placeholder="Code, description, category or batch no." />
         </div>
         <div>
-          <label htmlFor="inventory-type">Type</label>
-          <select
-            id="inventory-type"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as "ALL" | DrugType)}
-          >
-            <option value="ALL">All</option>
-            <option value="OTC">OTC</option>
-            <option value="DDA">DDA</option>
-          </select>
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-pine-700/80">Type</span>
+          <ListFilter
+            param="type"
+            label="Type"
+            options={[
+              { value: "", label: "All" },
+              { value: "OTC", label: "OTC" },
+              { value: "DDA", label: "DDA" },
+            ]}
+          />
         </div>
       </div>
       {message ? <p className="mt-3 text-sm">{message}</p> : null}
@@ -280,7 +284,7 @@ export function InventoryTable({ rows, canEdit }: { rows: InventoryRow[]; canEdi
                 {editingId === row.id ? (
                   <EditItemRow
                     row={row}
-                    index={index + 1}
+                    index={offset + index + 1}
                     colSpan={columns}
                     onDone={(saved) => {
                       setEditingId(null);
@@ -289,7 +293,7 @@ export function InventoryTable({ rows, canEdit }: { rows: InventoryRow[]; canEdi
                   />
                 ) : (
                 <tr>
-                  <td className="text-ink/50">{index + 1}</td>
+                  <td className="text-ink/50">{offset + index + 1}</td>
                   <td className="whitespace-nowrap font-mono text-xs">{row.sku}</td>
                   <td className="whitespace-nowrap">{row.categoryNo ?? "—"}</td>
                   <td className="whitespace-nowrap">
@@ -379,6 +383,7 @@ export function InventoryTable({ rows, canEdit }: { rows: InventoryRow[]; canEdi
           </tbody>
         </table>
       </div>
+      {pager}
       <DeleteItemDialog
         item={deleting}
         onClose={(deleted) => {

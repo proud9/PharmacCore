@@ -22,14 +22,18 @@ import {
   UsersRound,
   Warehouse,
   ArrowRight,
+  Building2,
+  Landmark,
   type LucideIcon,
 } from "lucide-react";
 import AccountForm from "@/components/auth/AccountForm";
 import { DispatchFeed } from "@/components/landing/DispatchFeed";
 import { DemoRequestDialog } from "@/components/landing/DemoRequestDialog";
 import { LandingNav } from "@/components/landing/LandingNav";
-import { readSession } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { homePath } from "@/lib/paths";
+import { isSetUp } from "@/lib/setup";
+import { CONTACT, SOCIAL_LINKS } from "@/lib/contact";
 import styles from "./landing.module.css";
 
 const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
@@ -51,24 +55,20 @@ const STEPS = [
   { title: "Delivered", text: "The order arrives, with its invoice and delivery note on file for both of you.", party: "Both" },
 ];
 
-// Placeholder company details: replace when known.
-const CONTACT = {
-  address: null as string | null,
-  phone: "+260 000 000 000",
-  email: "hello@example.com",
-  website: "www.example.com",
-};
 
 export default async function Home() {
-  const session = await readSession();
+  // requireUser checks the account still exists and is active, not just the cookie.
+  const [session, setUp] = await Promise.all([requireUser(), isSetUp()]);
   const year = new Date().getFullYear();
+  // Before a wholesale owns this installation, "Create an account" means setting it up.
+  const createHref = setUp ? "#create-account" : "/setup";
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={`${styles.wrap} ${styles.nav}`}>
           <Link href="/" className={styles.brand}>
-            <img className={styles.logo} src="/brand/parallax-logo.png" alt="" width={34} height={34} />
+            <img className={styles.logo} src="/brand/parallax-logo-96.png" alt="" width={34} height={34} />
             Parallax
           </Link>
           <LandingNav />
@@ -82,7 +82,7 @@ export default async function Home() {
                 <a className={styles.signin} href="#sign-in">
                   Sign in
                 </a>
-                <a className={`${styles.btn} ${styles.btnPrimary}`} href="#create-account">
+                <a className={`${styles.btn} ${styles.btnPrimary}`} href={createHref}>
                   Create an account
                 </a>
               </>
@@ -101,7 +101,7 @@ export default async function Home() {
                 and clinics, and every batch out of the warehouse on time.
               </p>
               <div className={styles.heroActions}>
-                <a className={`${styles.btn} ${styles.btnPrimary}`} href="#create-account">
+                <a className={`${styles.btn} ${styles.btnPrimary}`} href={createHref}>
                   Create an account
                 </a>
                 <button type="button" className={`${styles.btn} ${styles.btnQuiet}`} data-demo>
@@ -187,36 +187,72 @@ export default async function Home() {
         <section className={styles.band} id="account">
           <span id="sign-in" className={styles.anchor} aria-hidden="true" />
           <span id="create-account" className={styles.anchor} aria-hidden="true" />
-          <div className={`${styles.wrap} ${styles.accountGrid}`}>
-            <div className={styles.accountCopy}>
-              <h2>Order from your wholesaler online.</h2>
-              <p className={styles.intro}>
-                Pharmacies, hospitals and clinics: create a customer account to place orders, accept prices and follow
-                deliveries.
-              </p>
-              <ul className={styles.points}>
-                <li>
-                  <MonitorSmartphone className={styles.icon} aria-hidden="true" />
-                  <span>Nothing to install. Parallax runs in your browser, on a computer or phone.</span>
-                </li>
-                <li>
-                  <LockKeyhole className={styles.icon} aria-hidden="true" />
-                  <span>Your orders and documents are visible only to you and your wholesaler.</span>
-                </li>
-                <li>
-                  <Warehouse className={styles.icon} aria-hidden="true" />
-                  <span>
-                    Running a wholesale?{" "}
-                    <button type="button" className={styles.inlineLink} data-demo>
-                      Request a demo
-                    </button>{" "}
-                    to see Parallax with your own stock.
-                  </span>
-                </li>
-              </ul>
+          {setUp ? (
+            <div className={`${styles.wrap} ${styles.accountGrid}`}>
+              <div className={styles.accountCopy}>
+                <h2>Order from your wholesaler online.</h2>
+                <p className={styles.intro}>
+                  Pharmacies, hospitals and clinics: create a customer account to place orders, accept prices and follow
+                  deliveries.
+                </p>
+                <ul className={styles.points}>
+                  <li>
+                    <MonitorSmartphone className={styles.icon} aria-hidden="true" />
+                    <span>Nothing to install. Parallax runs in your browser, on a computer or phone.</span>
+                  </li>
+                  <li>
+                    <LockKeyhole className={styles.icon} aria-hidden="true" />
+                    <span>Your orders and documents are visible only to you and your wholesaler.</span>
+                  </li>
+                  <li>
+                    <Warehouse className={styles.icon} aria-hidden="true" />
+                    <span>
+                      Running a wholesale?{" "}
+                      <button type="button" className={styles.inlineLink} data-demo>
+                        Request a demo
+                      </button>{" "}
+                      to see Parallax with your own stock.
+                    </span>
+                  </li>
+                </ul>
+              </div>
+              <AccountForm allowRegistration initialMode="register" />
             </div>
-            <AccountForm allowRegistration initialMode="register" />
-          </div>
+          ) : (
+            <div className={`${styles.wrap} ${styles.accountGrid}`}>
+              <div className={styles.accountCopy}>
+                <h2>Set up your wholesale.</h2>
+                <p className={styles.intro}>
+                  Four short steps: your owner account, company details, logo and bank details. Your documents are ready
+                  to send as soon as you finish.
+                </p>
+                <ul className={styles.points}>
+                  <li>
+                    <Building2 className={styles.icon} aria-hidden="true" />
+                    <span>Company details go straight onto your quotations, invoices and delivery notes.</span>
+                  </li>
+                  <li>
+                    <Landmark className={styles.icon} aria-hidden="true" />
+                    <span>Bank details print on invoices so customers can pay you. Parallax never takes money out.</span>
+                  </li>
+                  <li>
+                    <UsersRound className={styles.icon} aria-hidden="true" />
+                    <span>Once you&apos;re set up, your pharmacies, hospitals and clinics can create accounts to order from you.</span>
+                  </li>
+                </ul>
+              </div>
+              <div className={styles.setupCard}>
+                <h3>Ready when you are</h3>
+                <p>It takes about five minutes. You can add the logo and bank details later if you don&apos;t have them to hand.</p>
+                <Link className={`${styles.btn} ${styles.btnPrimary}`} href="/setup">
+                  Set up your wholesale
+                </Link>
+                <p className={styles.setupAlt}>
+                  Already set up? <Link href="/login">Sign in</Link>
+                </p>
+              </div>
+            </div>
+          )}
         </section>
       </main>
 
@@ -235,7 +271,7 @@ export default async function Home() {
           <div className={styles.footGrid}>
             <div className={styles.footBrand}>
               <Link href="/" className={styles.brand}>
-                <img className={styles.logo} src="/brand/parallax-logo.png" alt="" width={38} height={38} />
+                <img className={styles.logo} src="/brand/parallax-logo-96.png" alt="" width={38} height={38} />
                 Parallax
               </Link>
               <p>Inventory, ordering and dispatch for medical wholesalers in Zambia.</p>
@@ -269,30 +305,41 @@ export default async function Home() {
                   <a href={`https://${CONTACT.website}`}>{CONTACT.website}</a>
                 </li>
               </ul>
-              <div className={styles.socials}>
-                <a href="#" aria-label="Parallax on LinkedIn">
-                  <Linkedin aria-hidden="true" />
-                </a>
-                <a href="#" aria-label="Parallax on Facebook">
-                  <Facebook aria-hidden="true" />
-                </a>
-                <a href="#" aria-label="Parallax on Instagram">
-                  <Instagram aria-hidden="true" />
-                </a>
-                <a href="#" aria-label="Parallax on X">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" aria-hidden="true">
-                    <path d="M4 4l16 16M20 4L4 20" />
-                  </svg>
-                </a>
-              </div>
+              {/* Each icon shows once its URL is set in lib/contact.ts. */}
+              {Object.values(SOCIAL_LINKS).some(Boolean) ? (
+                <div className={styles.socials}>
+                  {SOCIAL_LINKS.linkedin ? (
+                    <a href={SOCIAL_LINKS.linkedin} aria-label="Parallax on LinkedIn">
+                      <Linkedin aria-hidden="true" />
+                    </a>
+                  ) : null}
+                  {SOCIAL_LINKS.facebook ? (
+                    <a href={SOCIAL_LINKS.facebook} aria-label="Parallax on Facebook">
+                      <Facebook aria-hidden="true" />
+                    </a>
+                  ) : null}
+                  {SOCIAL_LINKS.instagram ? (
+                    <a href={SOCIAL_LINKS.instagram} aria-label="Parallax on Instagram">
+                      <Instagram aria-hidden="true" />
+                    </a>
+                  ) : null}
+                  {SOCIAL_LINKS.x ? (
+                    <a href={SOCIAL_LINKS.x} aria-label="Parallax on X">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" aria-hidden="true">
+                        <path d="M4 4l16 16M20 4L4 20" />
+                      </svg>
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
 
           <div className={styles.legal}>
             <span>© {year} Parallax. All rights reserved.</span>
             <nav aria-label="Legal">
-              <a href="#">Terms and conditions</a>
-              <a href="#">Privacy policy</a>
+              <Link href="/terms">Terms and conditions</Link>
+              <Link href="/privacy">Privacy policy</Link>
             </nav>
           </div>
         </div>

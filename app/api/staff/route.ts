@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -22,14 +23,22 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Staff details are incomplete." }, { status: 400 });
   }
-  const created = await db.user.create({
-    data: {
-      name: parsed.data.name,
-      email: parsed.data.email.toLowerCase(),
-      passwordHash: await bcrypt.hash(parsed.data.password, 10),
-      role: parsed.data.role,
-    },
-  });
+  let created;
+  try {
+    created = await db.user.create({
+      data: {
+        name: parsed.data.name,
+        email: parsed.data.email.toLowerCase(),
+        passwordHash: await bcrypt.hash(parsed.data.password, 10),
+        role: parsed.data.role,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json({ error: "Someone already signs in with this email." }, { status: 409 });
+    }
+    throw error;
+  }
   await audit({
     userId: user.id,
     action: "STAFF_CREATED",

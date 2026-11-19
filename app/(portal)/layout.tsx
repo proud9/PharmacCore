@@ -6,7 +6,8 @@ import { ROLE_LABEL } from "@/lib/utils";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  if (!user || !isBuyer(user.role)) redirect("/login");
+  if (!user) redirect("/api/auth/signout");
+  if (!isBuyer(user.role)) redirect("/login");
   const institution = user.institutionId
     ? await db.institution.findUnique({ where: { id: user.institutionId } })
     : null;

@@ -1,126 +1,189 @@
 import { NextResponse } from "next/server";
-import { canWholesale, isBuyer, requireUser } from "@/lib/auth";
+import { canSell, isBuyer, isManufacturer, isStaff, requireUser } from "@/lib/auth";
+import { PO_SUPPLIER_LABEL } from "@/lib/purchasing";
+import { getPharmacy } from "@/lib/pharmacy";
 import { db } from "@/lib/db";
 import { STATUS_LABEL } from "@/lib/wholesale";
-
-function includes(hay: string | null | undefined, needle: string) {
-  return (hay ?? "").toLowerCase().includes(needle);
-}
 
 export async function GET(request: Request) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const needle = new URL(request.url).searchParams.get("q")?.trim().toLowerCase() ?? "";
+  const needle = (new URL(request.url).searchParams.get("q") ?? "").trim().toLowerCase().slice(0, 100);
   if (needle.length < 2) return NextResponse.json({ hits: [] });
 
   const hits: { href: string; title: string; detail: string; group: string }[] = [];
 
+  const q = needle;
   if (isBuyer(user.role)) {
+    // Order numbers and item names are matched in the database, newest first.
     const orders = await db.consignment.findMany({
-      where: { institutionId: user.institutionId ?? "__none__" },
-      include: { items: { include: { product: true } } },
+      where: {
+        institutionId: user.institutionId ?? "__none__",
+        OR: [
+          { reference: { contains: q } },
+          { status: { in: statusesMatching(q) } },
+          { items: { some: { product: { name: { contains: q } } } } },
+        ],
+      },
+      select: { id: true, reference: true, status: true },
       orderBy: { createdAt: "desc" },
-      take: 80,
+      take: 8,
     });
+    // The wholesaler this installation belongs to: its contact details, and a way to order.
+    const wholesaler = await getPharmacy();
+    if (wholesaler && [wholesaler.name, wholesaler.phone, wholesaler.email].some((v) => (v ?? "").toLowerCase().includes(q))) {
+      hits.push({
+        href: "/portal/new",
+        title: wholesaler.name,
+        detail: [wholesaler.phone, wholesaler.email].filter(Boolean).join(" · ") || "Your wholesaler",
+        group: "Wholesaler",
+      });
+    }
     for (const order of orders) {
-      const blob = [
-        order.reference,
-        order.status,
-        STATUS_LABEL[order.status],
-        ...order.items.map((item) => item.product.name),
-      ].join(" ");
-      if (!includes(blob, needle)) continue;
       hits.push({
         href: `/portal/orders/${order.id}`,
         title: order.reference,
         detail: STATUS_LABEL[order.status] ?? order.status,
         group: "Orders",
       });
-      if (hits.length >= 8) break;
     }
     return NextResponse.json({ hits });
   }
 
-  const [products, patients, sales, orders] = await Promise.all([
-    db.product.findMany({ where: { active: true }, take: 200, orderBy: { name: "asc" } }),
-    db.patient.findMany({ take: 200, orderBy: { lastName: "asc" } }),
-    db.sale.findMany({
-      take: 80,
+  if (isManufacturer(user.role)) {
+    // A manufacturer finds only its own purchase orders.
+    const pos = await db.purchaseOrder.findMany({
+      where: {
+        supplierId: user.supplierId ?? "__none__",
+        OR: [
+          { reference: { contains: q } },
+          { invoiceNo: { contains: q } },
+          { deliveryNoteNo: { contains: q } },
+          { items: { some: { product: { name: { contains: q } } } } },
+        ],
+      },
+      select: { id: true, reference: true, status: true },
       orderBy: { createdAt: "desc" },
-      include: { patient: true, cashier: true },
+      take: 8,
+    });
+    for (const po of pos) {
+      hits.push({
+        href: `/supplier/orders/${po.id}`,
+        title: po.reference,
+        detail: PO_SUPPLIER_LABEL[po.status] ?? po.status,
+        group: "Orders",
+      });
+    }
+    return NextResponse.json({ hits });
+  }
+  if (!isStaff(user.role)) return NextResponse.json({ hits: [] });
+
+  // Each group is searched in the database, so matches are found however large the tables get.
+  const [products, patients, sales, orders, purchases] = await Promise.all([
+    db.product.findMany({
+      where: {
+        active: true,
+        OR: [
+          { name: { contains: q } },
+          { sku: { contains: q } },
+          { barcode: { contains: q } },
+          { genericName: { contains: q } },
+        ],
+      },
+      select: { id: true, name: true, sku: true },
+      orderBy: { name: "asc" },
+      take: 5,
     }),
-    canWholesale(user.role)
+    // Patients are only for roles that serve them (Finance can't open patient records).
+    !canSell(user.role) ? Promise.resolve([]) : db.patient.findMany({
+      where: {
+        OR: [
+          { firstName: { contains: q } },
+          { lastName: { contains: q } },
+          { phone: { contains: q } },
+          { insurance: { contains: q } },
+        ],
+      },
+      select: { firstName: true, lastName: true, phone: true },
+      orderBy: { lastName: "asc" },
+      take: 5,
+    }),
+    db.sale.findMany({
+      where: {
+        OR: [
+          { invoiceNo: { contains: q } },
+          { cashier: { name: { contains: q } } },
+          { patient: { firstName: { contains: q } } },
+          { patient: { lastName: { contains: q } } },
+        ],
+      },
+      select: { invoiceNo: true, patient: { select: { firstName: true, lastName: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 4,
+    }),
+    isStaff(user.role)
       ? db.consignment.findMany({
-          take: 80,
+          where: {
+            OR: [
+              { reference: { contains: q } },
+              { invoiceNo: { contains: q } },
+              { institution: { name: { contains: q } } },
+              { status: { in: statusesMatching(q) } },
+            ],
+          },
+          select: { id: true, reference: true, institution: { select: { name: true } } },
           orderBy: { createdAt: "desc" },
-          include: { institution: true },
+          take: 4,
         })
       : Promise.resolve([]),
+    db.purchaseOrder.findMany({
+      where: {
+        OR: [
+          { reference: { contains: q } },
+          { invoiceNo: { contains: q } },
+          { supplier: { name: { contains: q } } },
+        ],
+      },
+      select: { id: true, reference: true, supplier: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 4,
+    }),
   ]);
 
   for (const product of products) {
-    if (
-      !includes(product.name, needle) &&
-      !includes(product.sku, needle) &&
-      !includes(product.barcode, needle) &&
-      !includes(product.genericName, needle)
-    ) {
-      continue;
-    }
-    hits.push({
-      href: `/inventory/${product.id}`,
-      title: product.name,
-      detail: product.sku,
-      group: "Inventory",
-    });
-    if (hits.filter((h) => h.group === "Inventory").length >= 5) break;
+    hits.push({ href: `/inventory/${product.id}`, title: product.name, detail: product.sku, group: "Inventory" });
   }
-
   for (const patient of patients) {
-    const name = `${patient.firstName} ${patient.lastName}`;
-    if (!includes(name, needle) && !includes(patient.phone, needle) && !includes(patient.insurance, needle)) {
-      continue;
-    }
     hits.push({
-      href: "/patients",
+      href: `/patients?q=${encodeURIComponent(patient.lastName)}`,
       title: `${patient.lastName}, ${patient.firstName}`,
       detail: patient.phone ?? "Patient record",
       group: "Patients",
     });
-    if (hits.filter((h) => h.group === "Patients").length >= 5) break;
   }
-
   for (const sale of sales) {
-    const patientName = sale.patient ? `${sale.patient.firstName} ${sale.patient.lastName}` : "Walk-in";
-    if (!includes(sale.invoiceNo, needle) && !includes(patientName, needle) && !includes(sale.cashier.name, needle)) {
-      continue;
-    }
     hits.push({
-      href: "/sales",
+      href: `/sales?q=${encodeURIComponent(sale.invoiceNo)}`,
       title: sale.invoiceNo,
-      detail: patientName,
+      detail: sale.patient ? `${sale.patient.firstName} ${sale.patient.lastName}` : "Walk-in",
       group: "Sales",
     });
-    if (hits.filter((h) => h.group === "Sales").length >= 4) break;
+  }
+  for (const order of orders) {
+    hits.push({ href: `/wholesale/${order.id}`, title: order.reference, detail: order.institution.name, group: "Wholesale" });
   }
 
-  for (const order of orders) {
-    if (
-      !includes(order.reference, needle) &&
-      !includes(order.institution.name, needle) &&
-      !includes(STATUS_LABEL[order.status], needle)
-    ) {
-      continue;
-    }
-    hits.push({
-      href: `/wholesale/${order.id}`,
-      title: order.reference,
-      detail: order.institution.name,
-      group: "Wholesale",
-    });
-    if (hits.filter((h) => h.group === "Wholesale").length >= 4) break;
+  for (const po of purchases) {
+    hits.push({ href: `/purchases/${po.id}`, title: po.reference, detail: po.supplier.name, group: "Purchases" });
   }
 
   return NextResponse.json({ hits: hits.slice(0, 12) });
+}
+
+/** Status codes whose plain-English label contains the search text ("ready" → READY). */
+function statusesMatching(q: string) {
+  return Object.entries(STATUS_LABEL)
+    .filter(([code, label]) => code.toLowerCase().includes(q) || label.toLowerCase().includes(q))
+    .map(([code]) => code);
 }

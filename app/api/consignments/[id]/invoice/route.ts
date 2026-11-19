@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canWholesale, requireUser } from "@/lib/auth";
+import { canFinance, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { INVOICE_STATUSES } from "@/lib/documents";
-import { ref } from "@/lib/utils";
+import { money, ref } from "@/lib/utils";
 
 const schema = z.object({
   dueOn: z.string().min(4),
@@ -14,8 +14,8 @@ const schema = z.object({
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
-  if (!user || !canWholesale(user.role)) {
-    return NextResponse.json({ error: "Wholesale administrators only." }, { status: 403 });
+  if (!user || !canFinance(user.role)) {
+    return NextResponse.json({ error: "Only finance staff can send prices and invoices." }, { status: 403 });
   }
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -38,24 +38,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       dueOn: new Date(parsed.data.dueOn),
       amountPaid: parsed.data.amountPaid,
       terms: parsed.data.terms ?? existing.terms,
-      events: existing.invoiceNo
-        ? undefined
-        : {
-            create: {
-              status: existing.status,
-              message: "Invoice issued",
-              actorName: user.name,
-            },
-          },
+      // The client's history shows the invoice once, then each change to what has been paid.
+      events: !existing.invoiceNo
+        ? { create: { status: existing.status, message: "Invoice issued", actorName: user.name } }
+        : Math.abs(parsed.data.amountPaid - existing.amountPaid) > 0.001
+          ? {
+              create: {
+                status: existing.status,
+                message:
+                  parsed.data.amountPaid >= existing.quotedAmount - 0.001
+                    ? `Paid in full (${money(existing.quotedAmount)})`
+                    : `Payment recorded: ${money(parsed.data.amountPaid)} of ${money(existing.quotedAmount)} paid`,
+                actorName: user.name,
+              },
+            }
+          : undefined,
     },
   });
 
   await audit({
     userId: user.id,
-    action: "INVOICE_ISSUED",
+    action: existing.invoiceNo ? "PAYMENT_RECORDED" : "INVOICE_ISSUED",
     entity: "Consignment",
     entityId: id,
-    details: order.invoiceNo ?? order.reference,
+    details: `${order.invoiceNo ?? order.reference} · ${money(order.amountPaid)} of ${money(existing.quotedAmount)} paid`,
   });
 
   return NextResponse.json(order);

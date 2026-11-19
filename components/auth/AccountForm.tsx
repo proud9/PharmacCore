@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+
 import { Eye, EyeOff } from "lucide-react";
 
 type Mode = "login" | "register";
@@ -17,7 +17,6 @@ const HASH_MODE: Record<string, Mode> = { "#sign-in": "login", "#create-account"
 const labelClass = "mb-1.5 block text-[15px] font-semibold normal-case tracking-normal text-ink";
 
 export default function AccountForm({ allowRegistration = false, initialMode = "login" }: AccountFormProps) {
-  const router = useRouter();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -80,8 +79,8 @@ export default function AccountForm({ allowRegistration = false, initialMode = "
 
       const requestedPath = new URLSearchParams(window.location.search).get("next");
       const safePath = requestedPath?.startsWith("/") && !requestedPath.startsWith("//") ? requestedPath : null;
-      router.push(safePath ?? data.home ?? (isRegistration ? "/portal" : "/dashboard"));
-      router.refresh();
+      // Full load on sign-in: starts with an empty client page cache for this user.
+      window.location.assign(safePath ?? data.home ?? (isRegistration ? "/portal" : "/dashboard"));
     } catch {
       setError("Unable to reach Parallax. Check your connection and try again.");
     } finally {
@@ -132,6 +131,7 @@ export default function AccountForm({ allowRegistration = false, initialMode = "
                   <option value="PHARMACY">Pharmacy</option>
                   <option value="HOSPITAL">Hospital</option>
                   <option value="CLINIC">Clinic</option>
+                  <option value="SCHOOL">School</option>
                 </select>
               </div>
               <div>

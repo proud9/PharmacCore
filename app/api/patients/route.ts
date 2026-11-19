@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isStaff, requireUser } from "@/lib/auth";
+import { canSell, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 
@@ -20,7 +20,7 @@ const schema = z.object({
 export async function POST(request: Request) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isStaff(user.role)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  if (!canSell(user.role)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Patient details are incomplete." }, { status: 400 });

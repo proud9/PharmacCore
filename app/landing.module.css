@@ -227,3 +227,11 @@
   .label, .shown, .gone { transition: none; }
   :global(html):has(.page) { scroll-behavior: auto; }
 }
+
+/* Account section before a wholesale is set up */
+.setupCard { border: 1px solid var(--rule); border-radius: 16px; padding: 32px; background: var(--white); }
+.page .setupCard h3 { font-size: 24px; }
+.setupCard p { margin-top: 10px !important; color: var(--body); font-size: 17px; }
+.setupCard .btn { width: 100%; margin-top: 24px; }
+.page .setupAlt { margin-top: 16px !important; text-align: center; font-size: 15px; color: var(--foil); }
+.setupAlt a { color: var(--pine); font-weight: 600; text-underline-offset: 3px; }

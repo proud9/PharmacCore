@@ -1,7 +1,7 @@
 import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
-import { canWholesale, requireUser } from "@/lib/auth";
+import { canEditCompany, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 const TYPES: Record<string, string> = {
@@ -48,8 +48,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const user = await requireUser();
-  if (!user || !canWholesale(user.role)) {
-    return NextResponse.json({ error: "Wholesale administrators only." }, { status: 403 });
+  if (!user || !canEditCompany(user.role)) {
+    return NextResponse.json({ error: "Only administrators and finance staff can change company details." }, { status: 403 });
   }
   const form = await request.formData().catch(() => null);
   const file = form?.get("logo");

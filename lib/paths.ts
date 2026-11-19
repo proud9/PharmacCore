@@ -1,5 +1,7 @@
 export function homePath(role: string) {
   if (role === "BUYER") return "/portal";
-  if (role === "WHOLESALE_ADMIN") return "/wholesale";
+  if (role === "MANUFACTURER") return "/supplier";
+  if (role === "FINANCE") return "/wholesale/payments";
+  if (role === "SALES") return "/wholesale";
   return "/dashboard";
 }

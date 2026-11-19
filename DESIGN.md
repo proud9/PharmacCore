@@ -9,7 +9,7 @@ The signed-in app looks like a calm, professional pharmacy ledger: deep pine gre
 - Add dark mode, gradients on cards, glassmorphism, emoji, or illustrations.
 - Use raw Tailwind palette colors (`blue-500`, `gray-200`) for UI chrome. The only exceptions are the status tints in `Badge`.
 - Show `$` or unformatted numbers for money; always use `money()` (ZMW, shown as `K 11.20`).
-- Show raw enum codes (`WHOLESALE_ADMIN`, `QUOTED`) to users; use `ROLE_LABEL` / `STATUS_LABEL`.
+- Show raw enum codes (`FINANCE`, `QUOTED`) to users; use `ROLE_LABEL` / `STATUS_LABEL`.
 
 ## Tokens (`tailwind.config.ts`)
 
@@ -82,9 +82,10 @@ Page background is `bg-parchment` plus two soft radial washes (brass top-left, p
 | Downloads | `<a className="btn btn-ghost" download>` with `Download` icon; put them in the `PageHeader` action or the panel toolbar. Reports are CSV with a UTF-8 BOM; import templates are .xlsx |
 | Excel templates | Header row: required columns pine-800 fill with parchment text, optional columns sage-100 fill; frozen header; dates `dd/mm/yyyy`; dropdowns sourced from a hidden "Lists" sheet built from the same constants as the form; a "How to" sheet explains each column |
 | Labels in tables | Spell out flags rather than abbreviating (e.g. "Prescription: Required / Not required", not "Rx") |
-| Charts | `SalesChart` (area) / `MixChart` (horizontal bar): recharts, pine colors, faint grid, no legend clutter |
+| Charts | `SalesChart` (area) / `MixChart` (horizontal bar): recharts, pine colors, faint grid, no legend clutter. Import them from `components/charts` (lazy-loaded) |
 | Icons | `lucide-react`, `h-4 w-4` inline, `h-5 w-5` in the brand mark |
-| Search | `HeaderSearch` / `SearchInput` / `SearchScope` |
+| Search | `HeaderSearch` in the header. Long lists: `ListSearch` (+ `ListFilter` selects) above the table and `Pagination` below it. Choosing one record (patient, product): `LookupPicker`, which looks like an input and opens a list as you type. `SearchScope` only for short lists |
+| Empty rows | Last table row spanning all columns, centered `text-ink/60`: "No … match." when a search/filter is on, otherwise "No … yet." |
 
 Badge tone meaning: **good** = done or healthy (delivered, dispensed, completed); **brass** = in progress (price sent, preparing, out for delivery); **warn** = needs attention (requested, low stock, expiring); **bad** = stopped (declined, cancelled, out of stock); **neutral** = informational.
 

@@ -3,9 +3,10 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Line = { id: string; name: string; ordered: number };
+/** `sent` is the quantity on the manufacturer's delivery note, when it dispatched in Parallax. */
+type Line = { id: string; name: string; ordered: number; sent?: number };
 
-export function ReceivePoButton({ id, lines }: { id: string; lines: Line[] }) {
+export function ReceivePoButton({ id, lines, deliveryNoteNo = "" }: { id: string; lines: Line[]; deliveryNoteNo?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
@@ -52,13 +53,14 @@ export function ReceivePoButton({ id, lines }: { id: string; lines: Line[] }) {
       </p>
       <div className="mt-3 max-w-xs">
         <label>Delivery note no.</label>
-        <input name="deliveryNoteNo" required placeholder="e.g. DN-55120" />
+        <input name="deliveryNoteNo" required placeholder="e.g. DN-55120" defaultValue={deliveryNoteNo} />
       </div>
       <table className="table-grid mt-3">
         <thead>
           <tr>
             <th>Item</th>
             <th>Ordered</th>
+            {lines.some((line) => line.sent != null) ? <th>Sent</th> : null}
             <th>Delivered</th>
           </tr>
         </thead>
@@ -67,13 +69,14 @@ export function ReceivePoButton({ id, lines }: { id: string; lines: Line[] }) {
             <tr key={line.id}>
               <td>{line.name}</td>
               <td>{line.ordered}</td>
+              {lines.some((row) => row.sent != null) ? <td>{line.sent ?? "—"}</td> : null}
               <td>
                 <input
                   className="w-24"
                   name={`qty-${line.id}`}
                   type="number"
                   min={0}
-                  defaultValue={line.ordered}
+                  defaultValue={line.sent ?? line.ordered}
                   required
                 />
               </td>

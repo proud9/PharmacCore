@@ -58,7 +58,7 @@ export function DeliveryForm({
   return (
     <form onSubmit={onSubmit} className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
       <h2 className="font-display text-xl text-pine-900">{issued ? "Update delivery note" : "Issue delivery note"}</h2>
-      <p className="mt-1 text-sm text-ink/60">Record what left the pharmacy and how it is travelling.</p>
+      <p className="mt-1 text-sm text-ink/60">Record what is leaving the warehouse and how it is travelling. These quantities come off stock when the order is marked dispatched.</p>
       <div className="mt-4 space-y-3">
         {lines.map((line) => (
           <div key={line.id} className="grid gap-2 sm:grid-cols-2">

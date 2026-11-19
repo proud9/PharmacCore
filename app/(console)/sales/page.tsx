@@ -1,18 +1,44 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { db } from "@/lib/db";
+import { getPharmacy } from "@/lib/pharmacy";
 import { PageHeader } from "@/components/PageHeader";
 import { money } from "@/lib/utils";
-import { SearchScope } from "@/components/search/SearchScope";
+import { ListFilter, ListSearch } from "@/components/search/ListSearch";
+import { Pagination } from "@/components/Pagination";
+import { paging, searchText, type ListParams } from "@/lib/paging";
+import type { Prisma } from "@prisma/client";
 
-export default async function SalesPage() {
-  const [sales, pharmacy] = await Promise.all([
+const PAYMENTS = ["CASH", "CARD", "MOBILE", "INSURANCE"];
+
+export default async function SalesPage({ searchParams }: { searchParams: Promise<ListParams> }) {
+  const params = await searchParams;
+  const { page, take, skip, pageSize } = paging(params);
+  const q = searchText(params);
+  const payment = params.payment && PAYMENTS.includes(params.payment) ? params.payment : undefined;
+  const where: Prisma.SaleWhereInput = {
+    ...(payment ? { payment } : {}),
+    ...(q
+      ? {
+          OR: [
+            { invoiceNo: { contains: q } },
+            { cashier: { name: { contains: q } } },
+            { patient: { firstName: { contains: q } } },
+            { patient: { lastName: { contains: q } } },
+          ],
+        }
+      : {}),
+  };
+  const [sales, total, pharmacy] = await Promise.all([
     db.sale.findMany({
-      include: { cashier: true, patient: true, items: { include: { product: true } } },
+      where,
+      include: { cashier: { select: { name: true } }, patient: { select: { firstName: true, lastName: true } } },
       orderBy: { createdAt: "desc" },
-      take: 80,
+      take,
+      skip,
     }),
-    db.pharmacy.findUnique({ where: { id: "main" } }),
+    db.sale.count({ where }),
+    getPharmacy(),
   ]);
   const currency = pharmacy?.currency ?? "ZMW";
 
@@ -20,7 +46,15 @@ export default async function SalesPage() {
     <div>
       <PageHeader title="Sales" description="Receipts, payment method, cashier, and patient." />
       <section className="overflow-hidden rounded-2xl border border-pine-900/10 bg-white p-4 shadow-panel">
-        <SearchScope placeholder="Search invoice, cashier, or patient">
+        <div className="mb-3 grid gap-3 sm:grid-cols-[1fr_200px]">
+          <ListSearch placeholder="Search invoice, cashier, or patient" />
+          <ListFilter
+            param="payment"
+            label="Payment"
+            options={[{ value: "", label: "All payments" }, ...PAYMENTS.map((value) => ({ value, label: value }))]}
+          />
+        </div>
+        <div className="overflow-x-auto">
         <table className="table-grid">
           <thead>
             <tr>
@@ -34,25 +68,30 @@ export default async function SalesPage() {
           </thead>
           <tbody>
             {sales.map((sale) => (
-              <tr
-                key={sale.id}
-                data-search={`${sale.invoiceNo} ${sale.cashier.name} ${sale.patient ? `${sale.patient.firstName} ${sale.patient.lastName}` : "walk-in"} ${sale.payment}`.toLowerCase()}
-              >
+              <tr key={sale.id}>
                 <td className="font-mono text-xs">
                   <Link className="text-pine-800 underline" href={`/documents/sales/${sale.id}`}>
                     {sale.invoiceNo}
                   </Link>
                 </td>
-                <td>{format(sale.createdAt, "dd MMM HH:mm")}</td>
+                <td>{format(sale.createdAt, "dd MMM yyyy HH:mm")}</td>
                 <td>{sale.cashier.name}</td>
                 <td>{sale.patient ? `${sale.patient.lastName}, ${sale.patient.firstName}` : "Walk-in"}</td>
                 <td>{sale.payment}</td>
                 <td>{money(sale.total, currency)}</td>
               </tr>
             ))}
+            {sales.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-ink/60">
+                  {q || payment ? "No sales match." : "No sales yet."}
+                </td>
+              </tr>
+            ) : null}
             </tbody>
           </table>
-        </SearchScope>
+        </div>
+        <Pagination page={page} pageSize={pageSize} total={total} basePath="/sales" params={params} />
       </section>
     </div>
   );

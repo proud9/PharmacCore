@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canWholesale, requireUser } from "@/lib/auth";
+import { canEditCompany, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 
@@ -52,8 +52,8 @@ function sentFields(data: z.infer<typeof schema>) {
 
 export async function POST(request: Request) {
   const user = await requireUser();
-  if (!user || !canWholesale(user.role)) {
-    return NextResponse.json({ error: "Wholesale administrators only." }, { status: 403 });
+  if (!user || !canEditCompany(user.role)) {
+    return NextResponse.json({ error: "Only administrators and finance staff can change company details." }, { status: 403 });
   }
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

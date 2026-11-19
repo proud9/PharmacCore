@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { canWholesale, requireUser } from "@/lib/auth";
+import { canSell, isStaff, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
@@ -9,7 +9,7 @@ import { SearchScope } from "@/components/search/SearchScope";
 
 export default async function BuyerAccountsPage() {
   const user = await requireUser();
-  if (!user || !canWholesale(user.role)) redirect("/dashboard");
+  if (!user || !isStaff(user.role)) redirect("/dashboard");
   const institutions = await db.institution.findMany({
     include: { users: true, _count: { select: { orders: true } } },
     orderBy: { name: "asc" },
@@ -19,7 +19,7 @@ export default async function BuyerAccountsPage() {
     <div>
       <PageHeader
         title="Buyers"
-        description="Hospitals, clinics, and pharmacies that can place wholesale orders."
+        description="Hospitals, clinics, pharmacies and schools that can place wholesale orders. Each client has one account."
       />
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
         <section className="overflow-hidden rounded-2xl border border-pine-900/10 bg-white p-4 shadow-panel">
@@ -58,7 +58,7 @@ export default async function BuyerAccountsPage() {
           </table>
           </SearchScope>
         </section>
-        <AccountForm />
+        {canSell(user.role) ? <AccountForm /> : null}
       </div>
     </div>
   );

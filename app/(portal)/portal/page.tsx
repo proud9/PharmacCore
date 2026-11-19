@@ -6,15 +6,32 @@ import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { money } from "@/lib/utils";
 import { STATUS_LABEL, statusTone } from "@/lib/wholesale";
-import { SearchScope } from "@/components/search/SearchScope";
+import { ListFilter, ListSearch } from "@/components/search/ListSearch";
+import { Pagination } from "@/components/Pagination";
+import { paging, searchText, type ListParams } from "@/lib/paging";
+import type { Prisma } from "@prisma/client";
 
-export default async function PortalHomePage() {
+export default async function PortalHomePage({ searchParams }: { searchParams: Promise<ListParams> }) {
   const user = await requireUser();
-  const orders = await db.consignment.findMany({
-    where: { institutionId: user?.institutionId ?? "__none__" },
-    include: { items: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const params = await searchParams;
+  const { page, take, skip, pageSize } = paging(params);
+  const q = searchText(params);
+  const status = params.status && params.status in STATUS_LABEL ? params.status : undefined;
+  const where: Prisma.ConsignmentWhereInput = {
+    institutionId: user?.institutionId ?? "__none__",
+    ...(status ? { status } : {}),
+    ...(q ? { reference: { contains: q } } : {}),
+  };
+  const [orders, total] = await Promise.all([
+    db.consignment.findMany({
+      where,
+      include: { _count: { select: { items: true } } },
+      orderBy: { createdAt: "desc" },
+      take,
+      skip,
+    }),
+    db.consignment.count({ where }),
+  ]);
 
   return (
     <div>
@@ -28,7 +45,14 @@ export default async function PortalHomePage() {
         }
       />
       <section className="overflow-hidden rounded-2xl border border-pine-900/10 bg-white p-4 shadow-panel">
-        <SearchScope placeholder="Search order number or status">
+        <div className="mb-3 grid gap-3 sm:grid-cols-[1fr_220px]">
+          <ListSearch placeholder="Search order number" />
+          <ListFilter param="status" label="Status" options={[
+            { value: "", label: "All statuses" },
+            ...Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })),
+          ]} />
+        </div>
+        <div className="overflow-x-auto">
         <table className="table-grid">
           <thead>
             <tr>
@@ -44,22 +68,19 @@ export default async function PortalHomePage() {
             {orders.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-8 text-center text-sm text-ink/60">
-                  No orders yet. Start a new order to request medicines or equipment.
+                  {q || status ? "No orders match." : "No orders yet. Start a new order to request medicines or equipment."}
                 </td>
               </tr>
             ) : (
               orders.map((order) => (
-                <tr
-                  key={order.id}
-                  data-search={`${order.reference} ${order.status} ${STATUS_LABEL[order.status] ?? ""}`.toLowerCase()}
-                >
+                <tr key={order.id}>
                   <td>
                     <Link href={`/portal/orders/${order.id}`} className="font-mono text-xs hover:underline">
                       {order.reference}
                     </Link>
                   </td>
                   <td>{format(order.createdAt, "dd MMM yyyy")}</td>
-                  <td>{order.items.length}</td>
+                  <td>{order._count.items}</td>
                   <td>{order.quotedAmount != null ? money(order.quotedAmount, "ZMW") : "Awaiting quote"}</td>
                   <td>{order.readyOn ? format(order.readyOn, "dd MMM yyyy") : "—"}</td>
                   <td>
@@ -70,7 +91,8 @@ export default async function PortalHomePage() {
             )}
           </tbody>
         </table>
-        </SearchScope>
+        </div>
+        <Pagination page={page} pageSize={pageSize} total={total} basePath="/portal" params={params} />
       </section>
     </div>
   );

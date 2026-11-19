@@ -14,7 +14,7 @@ function BrandLink({ className, tone }: { className?: string; tone: "light" | "d
       <span
         className={`flex h-11 w-11 items-center justify-center rounded-xl p-1 ${tone === "light" ? "bg-white" : "bg-white ring-1 ring-rule"}`}
       >
-        <img src="/brand/parallax-logo.png" alt="" width={36} height={36} className="h-9 w-9" />
+        <img src="/brand/parallax-logo-96.png" alt="" width={36} height={36} className="h-9 w-9" />
       </span>
       <span className={`font-display text-2xl font-semibold ${tone === "light" ? "text-parchment" : "text-pine-800"}`}>
         Parallax
@@ -23,7 +23,8 @@ function BrandLink({ className, tone }: { className?: string; tone: "light" | "d
   );
 }
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ ended?: string }> }) {
+  const { ended } = await searchParams;
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <section className="relative hidden overflow-hidden bg-pine-950 p-12 text-parchment lg:flex lg:flex-col lg:justify-between">
@@ -40,6 +41,11 @@ export default function LoginPage() {
       <section className="flex flex-col items-center justify-center gap-8 p-5 sm:p-8">
         {/* On smaller screens the side panel is hidden, so show the way home above the form. */}
         <BrandLink tone="dark" className="lg:hidden" />
+        {ended ? (
+          <p className="w-full max-w-md rounded-xl bg-dispensary-soft px-4 py-3 text-sm text-pine-800" role="status">
+            Your session has ended. Please sign in again.
+          </p>
+        ) : null}
         <AccountForm />
       </section>
     </div>

@@ -1,17 +1,17 @@
-import { requireUser, canWholesale } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { requireUser, canEditCompany } from "@/lib/auth";
+import { getPharmacy } from "@/lib/pharmacy";
 import { PageHeader } from "@/components/PageHeader";
 import { PharmacyForm } from "@/components/forms/PharmacyForm";
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  const pharmacy = await db.pharmacy.findUnique({ where: { id: "main" } });
-  const canEdit = Boolean(user && canWholesale(user.role));
+  const pharmacy = await getPharmacy();
+  const canEdit = Boolean(user && canEditCompany(user.role));
 
   return (
     <div>
       <PageHeader
-        title="Pharmacy details"
+        title="Company details"
         description="Name, licence, and the bank details printed on quotations and invoices."
       />
       {canEdit ? (

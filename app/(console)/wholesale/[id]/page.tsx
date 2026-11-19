@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { format } from "date-fns";
-import { canWholesale, requireUser } from "@/lib/auth";
+import { addDays, format } from "date-fns";
+import { canFinance, canSell, isStaff, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
@@ -11,11 +11,11 @@ import { DeliveryForm } from "@/components/wholesale/DeliveryForm";
 import { StatusActions } from "@/components/wholesale/StatusActions";
 import { OrderTrack } from "@/components/wholesale/OrderTrack";
 import { adminNextStatuses, KIND_LABEL, STATUS_LABEL, statusTone } from "@/lib/wholesale";
-import { DELIVERY_STATUSES, documentTotals, INVOICE_STATUSES, QUOTE_STATUSES, zmw } from "@/lib/documents";
+import { documentTotals, INVOICE_STATUSES, QUOTE_STATUSES, zmw } from "@/lib/documents";
 
 export default async function WholesaleOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
-  if (!user || !canWholesale(user.role)) redirect("/dashboard");
+  if (!user || !isStaff(user.role)) redirect("/dashboard");
   const { id } = await params;
   const order = await db.consignment.findUnique({
     where: { id },
@@ -29,6 +29,9 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
   });
   if (!order) notFound();
   const totals = documentTotals(order.items, order.taxRate, order.quotedAmount);
+  // Finance prices and invoices; sales moves the order and issues the delivery note. Admin does both.
+  const finance = canFinance(user.role);
+  const sales = canSell(user.role);
 
   return (
     <div>
@@ -75,7 +78,7 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
             {order.deliveryAddress ? (
               <p className="mt-1 text-sm text-ink/70">Deliver to: {order.deliveryAddress}</p>
             ) : null}
-            <StatusActions id={order.id} options={adminNextStatuses(order.status)} />
+            {sales ? <StatusActions id={order.id} options={adminNextStatuses(order.status)} /> : null}
           </section>
           <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
             <h2 className="mb-3 font-display text-xl text-pine-900">Tracking</h2>
@@ -98,7 +101,7 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
                   Open quotation
                 </Link>
               ) : (
-                <p className="text-ink/50">Quotation appears after you send a price.</p>
+                <p className="text-ink/50">Quotation appears after finance sends a price.</p>
               )}
               {order.invoiceNo ? (
                 <Link className="text-pine-800 underline" href={`/documents/${order.id}/invoice`}>
@@ -112,9 +115,26 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
               ) : null}
             </div>
           </section>
-          {["REQUESTED", "QUOTED", "ACCEPTED"].includes(order.status) ? (
+          {order.invoiceNo && order.quotedAmount != null ? (
+            <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-pine-700/70">Payment</p>
+              <p className="mt-2 text-sm">
+                Paid {zmw(order.amountPaid)} of {zmw(order.quotedAmount)}
+                {order.dueOn ? ` · due ${format(order.dueOn, "dd MMM yyyy")}` : ""}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-pine-900">
+                {order.quotedAmount - order.amountPaid > 0.005
+                  ? `Balance ${zmw(order.quotedAmount - order.amountPaid)}`
+                  : "Paid in full"}
+              </p>
+            </section>
+          ) : null}
+          {finance && ["REQUESTED", "QUOTED", "ACCEPTED"].includes(order.status) && !order.invoiceNo ? (
             <QuoteForm
               id={order.id}
+              accepted={order.status === "ACCEPTED"}
+              readyOn={order.readyOn ? format(order.readyOn, "yyyy-MM-dd") : ""}
+              validUntil={format(order.validUntil ?? addDays(new Date(), 14), "yyyy-MM-dd")}
               taxRate={order.taxRate}
               terms={order.terms ?? ""}
               adminMessage={order.adminMessage ?? ""}
@@ -126,7 +146,7 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
               }))}
             />
           ) : null}
-          {INVOICE_STATUSES.includes(order.status) && order.quotedAmount != null ? (
+          {finance && INVOICE_STATUSES.includes(order.status) && order.quotedAmount != null ? (
             <InvoiceForm
               id={order.id}
               issued={Boolean(order.invoiceNo)}
@@ -135,7 +155,7 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
               dueOn={order.dueOn ? format(order.dueOn, "yyyy-MM-dd") : ""}
             />
           ) : null}
-          {DELIVERY_STATUSES.includes(order.status) ? (
+          {sales && (order.status === "PREPARING" || order.status === "READY") ? (
             <DeliveryForm
               id={order.id}
               issued={Boolean(order.deliveryNoteNo)}

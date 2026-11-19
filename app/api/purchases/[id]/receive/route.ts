@@ -3,6 +3,7 @@ import { z } from "zod";
 import { canAdjustStock, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
+import { PO_CLOSED } from "@/lib/purchasing";
 
 /**
  * Receives a supplier delivery against a purchase order. The supplier's delivery note
@@ -30,7 +31,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     where: { id },
     include: { items: true, supplier: true },
   });
-  if (!order || order.status === "RECEIVED") {
+  if (!order || PO_CLOSED.includes(order.status)) {
     return NextResponse.json({ error: "Order cannot be received." }, { status: 400 });
   }
 
@@ -45,10 +46,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const updated = await db.$transaction(async (tx) => {
     const claimed = await tx.purchaseOrder.updateMany({
-      where: { id, status: { not: "RECEIVED" } },
+      where: { id, status: { notIn: PO_CLOSED } },
       data: { status: "RECEIVED", receivedAt: new Date(), deliveryNoteNo: parsed.data.deliveryNoteNo },
     });
     if (claimed.count === 0) return false;
+    await tx.purchaseOrderEvent.create({
+      data: {
+        orderId: order.id,
+        status: "RECEIVED",
+        message: `Received with delivery note ${parsed.data.deliveryNoteNo}; ${delivered.length} line(s) sent to Inventory`,
+        actorName: user.name,
+      },
+    });
     await tx.stockIntake.createMany({
       data: delivered.map((line) => {
         const item = items.get(line.itemId)!;

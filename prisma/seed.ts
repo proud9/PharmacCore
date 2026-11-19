@@ -15,6 +15,7 @@ async function main() {
   await db.stockTake.deleteMany();
   await db.prescriptionItem.deleteMany();
   await db.prescription.deleteMany();
+  await db.purchaseOrderEvent.deleteMany();
   await db.purchaseOrderItem.deleteMany();
   await db.purchaseOrder.deleteMany();
   await db.batch.deleteMany();
@@ -28,7 +29,8 @@ async function main() {
 
   const password = (plain: string) => bcrypt.hash(plain, 10);
 
-  const [admin, wholesaleAdmin, pharmacist, technician, cashier, inventory] = await Promise.all([
+  // Wholesale staff: ADMIN (owner, everything), FINANCE (prices, invoices, payments), SALES (stock, sales, buyers, orders).
+  const [admin, finance, sales] = await Promise.all([
     db.user.create({
       data: {
         email: "admin@pharmacore.local",
@@ -39,42 +41,18 @@ async function main() {
     }),
     db.user.create({
       data: {
-        email: "wholesale@pharmacore.local",
+        email: "finance@pharmacore.local",
         name: "Chanda Mulenga",
-        passwordHash: await password("Whole123!"),
-        role: "WHOLESALE_ADMIN",
+        passwordHash: await password("Finance123!"),
+        role: "FINANCE",
       },
     }),
     db.user.create({
       data: {
-        email: "pharmacist@pharmacore.local",
-        name: "Dr. Elias Brandt",
-        passwordHash: await password("Pharma123!"),
-        role: "PHARMACIST",
-      },
-    }),
-    db.user.create({
-      data: {
-        email: "tech@pharmacore.local",
-        name: "Lina Moreau",
-        passwordHash: await password("Tech123!"),
-        role: "TECHNICIAN",
-      },
-    }),
-    db.user.create({
-      data: {
-        email: "cashier@pharmacore.local",
+        email: "sales@pharmacore.local",
         name: "Noah Patel",
-        passwordHash: await password("Cash123!"),
-        role: "CASHIER",
-      },
-    }),
-    db.user.create({
-      data: {
-        email: "stock@pharmacore.local",
-        name: "Sofia Reyes",
-        passwordHash: await password("Stock123!"),
-        role: "INVENTORY",
+        passwordHash: await password("Sales123!"),
+        role: "SALES",
       },
     }),
   ]);
@@ -437,7 +415,7 @@ async function main() {
     data: {
       rxNumber: "RX-100284",
       patientId: patients[0].id,
-      pharmacistId: pharmacist.id,
+      pharmacistId: sales.id,
       prescriber: "Dr. Camille Ng",
       clinic: "Harbor Family Clinic",
       status: "PENDING",
@@ -471,7 +449,7 @@ async function main() {
     await db.sale.create({
       data: {
         invoiceNo: `INV-${1000 + offset}`,
-        cashierId: cashier.id,
+        cashierId: sales.id,
         patientId: offset % 2 === 0 ? patients[1].id : null,
         subtotal: total,
         tax: 0,
@@ -502,7 +480,7 @@ async function main() {
   await db.sale.create({
     data: {
       invoiceNo: "INV-TODAY-1",
-      cashierId: cashier.id,
+      cashierId: sales.id,
       patientId: patients[2].id,
       subtotal: vitamin.sellingPrice,
       tax: 0,
@@ -526,13 +504,90 @@ async function main() {
     data: {
       reference: "PO-24018",
       supplierId: medline.id,
-      createdById: inventory.id,
-      status: "ORDERED",
+      createdById: sales.id,
+      status: "SENT",
       notes: "Restock azithromycin and insulin",
       items: {
         create: [
           { productId: products[1].id, quantity: 80, unitCost: products[1].costPrice },
           { productId: products[7].id, quantity: 20, unitCost: products[7].costPrice },
+        ],
+      },
+      events: { create: { status: "SENT", message: "Order sent to the manufacturer", actorName: sales.name } },
+    },
+  });
+
+  // MedLine has a manufacturer login: it prices, invoices and dispatches in Parallax.
+  await db.user.create({
+    data: {
+      email: "medline@pharmacore.local",
+      name: "Priya Shah",
+      passwordHash: await password("Maker123!"),
+      role: "MANUFACTURER",
+      supplierId: medline.id,
+    },
+  });
+  const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+  const dispatchedLines = [
+    { product: products[2], quantity: 120, unitCost: Math.round(products[2].costPrice * 0.95 * 100) / 100 },
+    { product: products[5], quantity: 60, unitCost: Math.round(products[5].costPrice * 0.95 * 100) / 100 },
+  ];
+  const dispatchedTotal = dispatchedLines.reduce((sum, line) => sum + line.quantity * line.unitCost, 0);
+  await db.purchaseOrder.create({
+    data: {
+      reference: "PO-24011",
+      supplierId: medline.id,
+      createdById: sales.id,
+      createdAt: daysAgo(12),
+      status: "DISPATCHED",
+      quotedAmount: Math.round(dispatchedTotal * 100) / 100,
+      quotedAt: daysAgo(11),
+      readyOn: daysAgo(5),
+      validUntil: daysAgo(-10),
+      supplierMessage: "Prices held from last quarter.",
+      invoiceNo: "ML-INV-77310",
+      invoicedAt: daysAgo(4),
+      dueOn: daysAgo(-26),
+      amountPaid: Math.round(dispatchedTotal * 0.4 * 100) / 100,
+      dispatchedAt: daysAgo(2),
+      deliveryNoteNo: "ML-DN-5512",
+      deliveryMethod: "MedLine truck",
+      items: {
+        create: dispatchedLines.map((line) => ({
+          productId: line.product.id,
+          quantity: line.quantity,
+          unitCost: line.unitCost,
+          qtyDispatched: line.quantity,
+        })),
+      },
+      events: {
+        create: [
+          { status: "SENT", message: "Order sent to the manufacturer", actorName: sales.name, createdAt: daysAgo(12) },
+          { status: "QUOTED", message: "Prices held from last quarter.", actorName: "Priya Shah (MedLine Wholesale)", createdAt: daysAgo(11) },
+          { status: "ACCEPTED", message: "Price accepted", actorName: finance.name, createdAt: daysAgo(10) },
+          { status: "ACCEPTED", message: "Invoice ML-INV-77310 issued", actorName: "Priya Shah (MedLine Wholesale)", createdAt: daysAgo(4) },
+          { status: "DISPATCHED", message: "Dispatched with delivery note ML-DN-5512", actorName: "Priya Shah (MedLine Wholesale)", createdAt: daysAgo(2) },
+        ],
+      },
+    },
+  });
+  // Apex has no login: finance enters its paper quotation.
+  await db.purchaseOrder.create({
+    data: {
+      reference: "PO-24015",
+      supplierId: apex.id,
+      createdById: sales.id,
+      createdAt: daysAgo(3),
+      status: "QUOTED",
+      quotedAmount: Math.round(products[3].costPrice * 200 * 100) / 100,
+      quotedAt: daysAgo(1),
+      readyOn: daysAgo(-7),
+      validUntil: daysAgo(-14),
+      items: { create: [{ productId: products[3].id, quantity: 200, unitCost: products[3].costPrice }] },
+      events: {
+        create: [
+          { status: "SENT", message: "Order sent to the manufacturer", actorName: sales.name, createdAt: daysAgo(3) },
+          { status: "QUOTED", message: "Price entered from Apex's quotation", actorName: `${finance.name} for Apex Generics`, createdAt: daysAgo(1) },
         ],
       },
     },
@@ -621,7 +676,7 @@ async function main() {
       events: {
         create: {
           status: "REQUESTED",
-          message: "Consignment request submitted",
+          message: "Order request sent",
           actorName: uthBuyer.name,
         },
       },
@@ -633,7 +688,7 @@ async function main() {
       reference: "CN-KAB-2408",
       institutionId: clinic.id,
       requestedById: clinicBuyer.id,
-      quotedById: wholesaleAdmin.id,
+      quotedById: finance.id,
       status: "QUOTED",
       notes: "Clinic opening pack plus diagnostics.",
       deliveryAddress: "Kabulonga Family Clinic stores",
@@ -654,14 +709,14 @@ async function main() {
         create: [
           {
             status: "REQUESTED",
-            message: "Consignment request submitted",
+            message: "Order request sent",
             actorName: clinicBuyer.name,
             createdAt: subDays(new Date(), 1),
           },
           {
             status: "QUOTED",
             message: "Quoted K 18640.00 · ready in 3 days.",
-            actorName: wholesaleAdmin.name,
+            actorName: finance.name,
           },
         ],
       },
@@ -680,8 +735,9 @@ async function main() {
 
   console.log("Parallax seeded.");
   console.log("Admin:            admin@pharmacore.local / Admin123!");
-  console.log("Wholesale admin:  wholesale@pharmacore.local / Whole123!");
-  console.log("Pharmacist:       pharmacist@pharmacore.local / Pharma123!");
+  console.log("Finance:          finance@pharmacore.local / Finance123!");
+  console.log("Sales:            sales@pharmacore.local / Sales123!");
+  console.log("Manufacturer:     medline@pharmacore.local / Maker123!");
   console.log("UTH buyer:        uth@pharmacore.local / Buyer123!");
   console.log("Clinic buyer:     clinic@pharmacore.local / Buyer123!");
   console.log("Pharmacy buyer:   partner@pharmacore.local / Buyer123!");

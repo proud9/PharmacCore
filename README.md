@@ -4,6 +4,18 @@ Parallax runs a medical wholesale: inventory with batches and expiry dates, purc
 
 The name: parallax is the way one object looks different from different points of view. Management, warehouse staff and finance each get their own view of the same live data.
 
+## Setting up for a real wholesale
+
+For a live installation, create the database without demo data, start the app, and open it in a browser:
+
+```powershell
+npm.cmd install
+npm.cmd run setup:empty
+npm.cmd run dev
+```
+
+Choose **Create an account** (or go to `/setup`) and follow the four steps: owner account, company details, logo and bank details. Logo and bank details can be added later under Pharmacy details. Once a wholesale is set up, the page offers sign-in and your customers can create their own accounts.
+
 ## Setup and start
 
 Requirements: Node.js and npm.
@@ -22,7 +34,44 @@ For an existing database, apply schema changes before starting the updated app:
 npm.cmd run db:push
 ```
 
+The development server (`npm run dev`, Turbopack) compiles each page on first visit. For day-to-day use, run the production build instead, which is much faster:
+
+```powershell
+npm.cmd run build
+npm.cmd start
+```
+
+In Claude Code's desktop app, the `parallax-prod` preview in `.claude/launch.json` runs the built app on port 3100 over plain HTTP.
+
+Production sign-in cookies are HTTPS-only. To use `npm start` over plain HTTP on a trusted local network, set `COOKIE_SECURE="false"` in `.env`.
+
 `npm run setup` creates or updates the local database and seeds demonstration data. Seeding resets the demo database; do not use it against production data.
+
+## Demo on a local network
+
+Run Parallax on this computer and let other computers on the same Wi-Fi or office network use it:
+
+```bash
+npm run demo -- --reset
+```
+
+The command prints an address such as `http://192.168.0.100:3000`. Open it on the other computers. The first person to open it sets up the wholesale (owner account, company, logo and bank details). That owner then adds Finance and Sales staff under **Staff**. Client organisations sign up from the landing page, or Sales creates them under **Buyers**.
+
+- Leave the window open during the demo; `Ctrl+C` stops it. Run `npm run demo` (without `--reset`) to carry on with the same data later.
+- `npm run demo -- --seed` starts with the sample stock, orders and demo logins instead of an empty installation.
+- If other computers can't connect, check:
+  - all the computers are on the same network (not a guest network that isolates devices);
+  - the computer's firewall allows incoming connections for Node;
+  - the address printed is the current one (it can change when you reconnect to Wi-Fi).
+- The demo runs over plain HTTP on a trusted network only. Don't expose it to the internet.
+
+## Tests
+
+```bash
+npm test -- --build
+```
+
+This plays every account type's work end to end on throwaway databases, and checks each role's pages and permissions. Your own data in `prisma/dev.db` is not touched. Drop `--build` when the code hasn't changed since the last build.
 
 ## Sign-in accounts
 
@@ -31,9 +80,9 @@ These are local demonstration accounts created by the seed script. Change or rem
 | Who | Email | Password |
 | --- | --- | --- |
 | Administrator | admin@pharmacore.local | Admin123! |
-| Wholesale manager | wholesale@pharmacore.local | Whole123! |
-| Pharmacist | pharmacist@pharmacore.local | Pharma123! |
-| Cashier | cashier@pharmacore.local | Cash123! |
+| Finance | finance@pharmacore.local | Finance123! |
+| Sales | sales@pharmacore.local | Sales123! |
+| Manufacturer (MedLine) | medline@pharmacore.local | Maker123! |
 | Hospital buyer (UTH) | uth@pharmacore.local | Buyer123! |
 | Clinic buyer | clinic@pharmacore.local | Buyer123! |
 | Pharmacy buyer | partner@pharmacore.local | Buyer123! |

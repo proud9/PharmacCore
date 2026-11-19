@@ -1,5 +1,7 @@
 "use client";
 
+import { BANK_DETAILS_NOTE } from "@/lib/bank-note";
+import { ShieldCheck } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -65,7 +67,7 @@ export function PharmacyForm({ details, hasLogo }: { details: Details; hasLogo: 
 
   return (
     <div className="grid max-w-3xl gap-4">
-    <form onSubmit={uploadLogo} className="rounded-2xl border border-pine-900/10 bg-white p-6 shadow-panel">
+    <form id="logo" onSubmit={uploadLogo} className="scroll-mt-6 rounded-2xl border border-pine-900/10 bg-white p-6 shadow-panel">
       <h2 className="font-display text-xl text-pine-900">Logo</h2>
       <p className="mt-1 text-sm text-ink/60">PNG, JPG, or WebP, up to 1.5 MB. Printed on quotations, invoices, and delivery notes.</p>
       {hasLogo || logoVersion > 0 ? (
@@ -106,7 +108,11 @@ export function PharmacyForm({ details, hasLogo }: { details: Details; hasLogo: 
           <input name="tpin" defaultValue={details.tpin} />
         </div>
       </div>
-      <h2 className="font-display text-xl text-pine-900">Bank details for invoices</h2>
+      <h2 id="bank" className="scroll-mt-6 font-display text-xl text-pine-900">Bank details for invoices</h2>
+      <div className="flex gap-3 rounded-xl bg-dispensary-soft p-4 text-sm text-pine-800">
+        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-dispensary" aria-hidden="true" />
+        <p>{BANK_DETAILS_NOTE}</p>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label>Bank name</label>

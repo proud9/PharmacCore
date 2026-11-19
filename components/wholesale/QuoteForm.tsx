@@ -11,8 +11,16 @@ export function QuoteForm({
   taxRate = 0,
   terms = "",
   adminMessage = "",
+  accepted = false,
+  readyOn = "",
+  validUntil = "",
 }: {
+  /** yyyy-MM-dd; the dates already sent, so changing a price keeps them unless edited. */
+  readyOn?: string;
+  validUntil?: string;
   id: string;
+  /** The buyer already accepted the current price: a new one goes back to them to accept again. */
+  accepted?: boolean;
   lines: Line[];
   taxRate?: number;
   terms?: string;
@@ -53,8 +61,12 @@ export function QuoteForm({
 
   return (
     <form onSubmit={onSubmit} className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
-      <h2 className="font-display text-xl text-pine-900">Send a quotation</h2>
-      <p className="mt-1 text-sm text-ink/60">Price each line in Kwacha. Tax is added to the line totals.</p>
+      <h2 className="font-display text-xl text-pine-900">{accepted ? "Change the price" : "Send a quotation"}</h2>
+      <p className="mt-1 text-sm text-ink/60">
+        {accepted
+          ? "The buyer has accepted the current price. A new price goes back to them to accept again before the order is prepared."
+          : "Price each line in Kwacha. Tax is added to the line totals."}
+      </p>
       <div className="mt-4 space-y-3">
         {lines.map((line) => (
           <div key={line.id} className="grid grid-cols-[1fr_88px] items-end gap-2">
@@ -74,11 +86,11 @@ export function QuoteForm({
           </div>
           <div>
             <label>Ready for delivery</label>
-            <input name="readyOn" type="date" required />
+            <input name="readyOn" type="date" required defaultValue={readyOn} />
           </div>
           <div>
             <label>Quotation valid until</label>
-            <input name="validUntil" type="date" required />
+            <input name="validUntil" type="date" required defaultValue={validUntil} />
           </div>
         </div>
         <div>
@@ -92,7 +104,7 @@ export function QuoteForm({
       </div>
       {error ? <p className="mt-2 text-sm text-rust">{error}</p> : null}
       <button className="btn btn-primary mt-4 w-full" disabled={loading}>
-        {loading ? "Sending…" : "Send quotation"}
+        {loading ? "Sending…" : accepted ? "Send the new price" : "Send quotation"}
       </button>
     </form>
   );

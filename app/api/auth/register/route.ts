@@ -6,17 +6,23 @@ import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { setSessionCookie, signSession } from "@/lib/auth";
 import { homePath } from "@/lib/paths";
+import { isSetUp } from "@/lib/setup";
+import { INSTITUTION_KINDS } from "@/lib/wholesale";
 import type { Role } from "@/lib/utils";
 
 const schema = z.object({
   name: z.string().trim().min(2).max(100),
   institutionName: z.string().trim().min(2).max(150),
-  kind: z.enum(["PHARMACY", "HOSPITAL", "CLINIC"]),
+  kind: z.enum(INSTITUTION_KINDS),
   email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
   password: z.string().min(8),
 });
 
 export async function POST(request: Request) {
+  // Customers order from this installation's wholesale, so sign-up waits until one is set up.
+  if (!(await isSetUp())) {
+    return NextResponse.json({ error: "Customer accounts open once the wholesale has finished setting up." }, { status: 409 });
+  }
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {

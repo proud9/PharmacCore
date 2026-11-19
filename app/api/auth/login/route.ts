@@ -1,3 +1,4 @@
+import { homePath } from "@/lib/paths";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -39,5 +40,5 @@ export async function POST(request: Request) {
   await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   await audit({ userId: user.id, action: "LOGIN", entity: "User", entityId: user.id });
 
-  return NextResponse.json({ ok: true, role: user.role, home: user.role === "BUYER" ? "/portal" : user.role === "WHOLESALE_ADMIN" ? "/wholesale" : "/dashboard" });
+  return NextResponse.json({ ok: true, role: user.role, home: homePath(user.role) });
 }

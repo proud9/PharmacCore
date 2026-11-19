@@ -1,21 +1,49 @@
 import { format } from "date-fns";
+import { redirect } from "next/navigation";
+import { homePath } from "@/lib/paths";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { PrescriptionForm } from "@/components/forms/PrescriptionForm";
 import { DispenseButton } from "@/components/forms/DispenseButton";
 import { canDispense, requireUser } from "@/lib/auth";
-import { SearchScope } from "@/components/search/SearchScope";
+import { ListFilter, ListSearch } from "@/components/search/ListSearch";
+import { Pagination } from "@/components/Pagination";
+import { paging, searchText, type ListParams } from "@/lib/paging";
+import type { Prisma } from "@prisma/client";
 
-export default async function PrescriptionsPage() {
+const PAGE = 20;
+
+export default async function PrescriptionsPage({ searchParams }: { searchParams: Promise<ListParams> }) {
   const user = await requireUser();
-  const [prescriptions, patients, products] = await Promise.all([
+  // Prescriptions hold patients' health details, so only roles that dispense see them (as with Patients).
+  if (!user || !canDispense(user.role)) redirect(homePath(user?.role ?? ""));
+  const params = await searchParams;
+  const { page, take, skip, pageSize } = paging(params, PAGE);
+  const q = searchText(params);
+  const status = params.status === "PENDING" || params.status === "DISPENSED" ? params.status : undefined;
+  const where: Prisma.PrescriptionWhereInput = {
+    ...(status ? { status } : {}),
+    ...(q
+      ? {
+          OR: [
+            { rxNumber: { contains: q } },
+            { prescriber: { contains: q } },
+            { patient: { firstName: { contains: q } } },
+            { patient: { lastName: { contains: q } } },
+          ],
+        }
+      : {}),
+  };
+  const [prescriptions, total] = await Promise.all([
     db.prescription.findMany({
-      include: { patient: true, items: { include: { product: true } } },
+      where,
+      include: { patient: true, items: { include: { product: { select: { name: true } } } } },
       orderBy: { createdAt: "desc" },
+      take,
+      skip,
     }),
-    db.patient.findMany({ orderBy: { lastName: "asc" } }),
-    db.product.findMany({ where: { requiresRx: true, active: true }, orderBy: { name: "asc" } }),
+    db.prescription.count({ where }),
   ]);
   const allow = Boolean(user && canDispense(user.role));
 
@@ -23,12 +51,23 @@ export default async function PrescriptionsPage() {
     <div>
       <PageHeader title="Prescriptions" description="Record a prescription and dispense it when the medicines are ready." />
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
-        <SearchScope placeholder="Search patient, doctor, or prescription number">
+        <div>
+        <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_200px]">
+          <ListSearch placeholder="Search patient, doctor, or prescription number" />
+          <ListFilter
+            param="status"
+            label="Status"
+            options={[
+              { value: "", label: "All" },
+              { value: "PENDING", label: "Waiting" },
+              { value: "DISPENSED", label: "Dispensed" },
+            ]}
+          />
+        </div>
         <div className="space-y-4">
           {prescriptions.map((rx) => (
             <article
               key={rx.id}
-              data-search={`${rx.rxNumber} ${rx.patient.firstName} ${rx.patient.lastName} ${rx.prescriber} ${rx.status} ${rx.items.map((i) => i.product.name).join(" ")}`.toLowerCase()}
               className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -41,7 +80,7 @@ export default async function PrescriptionsPage() {
                     {rx.prescriber} · {rx.clinic ?? "clinic not stated"} · {format(rx.createdAt, "dd MMM yyyy")}
                   </p>
                 </div>
-                <Badge tone={rx.status === "DISPENSED" ? "good" : "warn"}>{rx.status}</Badge>
+                <Badge tone={rx.status === "DISPENSED" ? "good" : "warn"}>{rx.status === "DISPENSED" ? "Dispensed" : "Waiting"}</Badge>
               </div>
               <ul className="mt-3 space-y-1 text-sm">
                 {rx.items.map((item) => (
@@ -57,16 +96,16 @@ export default async function PrescriptionsPage() {
               {allow && rx.status !== "DISPENSED" ? <DispenseButton id={rx.id} /> : null}
             </article>
           ))}
+          {prescriptions.length === 0 ? (
+            <p className="rounded-2xl border border-pine-900/10 bg-white p-6 text-center text-sm text-ink/60 shadow-panel">
+              {q || status ? "No prescriptions match." : "No prescriptions yet."}
+            </p>
+          ) : null}
         </div>
-        </SearchScope>
+        <Pagination page={page} pageSize={pageSize} total={total} basePath="/prescriptions" params={params} />
+        </div>
         {allow ? (
-          <PrescriptionForm
-            patients={patients.map((p) => ({
-              id: p.id,
-              name: `${p.lastName}, ${p.firstName}`,
-            }))}
-            products={products.map((p) => ({ id: p.id, name: p.name }))}
-          />
+          <PrescriptionForm />
         ) : (
           <p className="text-sm text-ink/60">A pharmacist or administrator must sign in to add prescriptions.</p>
         )}

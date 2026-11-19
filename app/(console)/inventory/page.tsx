@@ -10,20 +10,45 @@ import { expiryWindow } from "@/lib/inventory";
 import { purgeExpiredDeletions } from "@/lib/deletion";
 import { drugTypeOf } from "@/lib/stocksheet";
 import { stockOf } from "@/lib/utils";
+import { Pagination } from "@/components/Pagination";
+import { paging, searchText, type ListParams } from "@/lib/paging";
+import type { Prisma } from "@prisma/client";
 
 /**
  * Inventory is where stock and items are added or changed: the delivery queue from
  * supplier delivery notes, "Add item", CSV import, and per-row edits.
  */
-export default async function InventoryPage() {
+export default async function InventoryPage({ searchParams }: { searchParams: Promise<ListParams> }) {
   await purgeExpiredDeletions();
-  const [user, products, intakes, deletedCount] = await Promise.all([
+  const params = await searchParams;
+  const { page, take, skip, pageSize } = paging(params);
+  const q = searchText(params);
+  const type = params.type === "OTC" || params.type === "DDA" ? params.type : undefined;
+  const where: Prisma.ProductWhereInput = {
+    active: true,
+    ...(type ? { controlled: type === "DDA" } : {}),
+    ...(q
+      ? {
+          OR: [
+            { sku: { contains: q } },
+            { name: { contains: q } },
+            { categoryNo: { contains: q } },
+            { batches: { some: { lotNumber: { contains: q }, quantity: { gt: 0 } } } },
+          ],
+        }
+      : {}),
+  };
+  // One page of items; search and the type filter run in the database.
+  const [user, products, total, intakes, deletedCount] = await Promise.all([
     requireUser(),
     db.product.findMany({
-      where: { active: true },
+      where,
       include: { batches: { where: { quantity: { gt: 0 } }, orderBy: { expiryDate: "asc" } } },
       orderBy: { sku: "asc" },
+      take,
+      skip,
     }),
+    db.product.count({ where }),
     db.stockIntake.findMany({
       where: { status: "PENDING" },
       include: { product: true },
@@ -89,7 +114,13 @@ export default async function InventoryPage() {
         }
       />
       {queue.length ? <IntakeQueue rows={queue} canEdit={canEdit} /> : null}
-      <InventoryTable rows={rows} canEdit={canEdit} />
+      <InventoryTable
+        rows={rows}
+        canEdit={canEdit}
+        total={total}
+        offset={skip}
+        pager={<Pagination page={page} pageSize={pageSize} total={total} basePath="/inventory" params={params} />}
+      />
     </div>
   );
 }

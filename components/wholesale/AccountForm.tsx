@@ -58,6 +58,7 @@ export function AccountForm() {
             <option value="HOSPITAL">Hospital</option>
             <option value="CLINIC">Clinic</option>
             <option value="PHARMACY">Pharmacy</option>
+            <option value="SCHOOL">School</option>
           </select>
         </div>
         <div>

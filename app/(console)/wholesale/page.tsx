@@ -1,42 +1,70 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
-import { canWholesale, requireUser } from "@/lib/auth";
+import { isStaff, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
+import { FinishSetup } from "@/components/FinishSetup";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/Badge";
 import { KIND_LABEL, STATUS_LABEL, statusTone } from "@/lib/wholesale";
 import { money } from "@/lib/utils";
-import { SearchScope } from "@/components/search/SearchScope";
+import { ListFilter, ListSearch } from "@/components/search/ListSearch";
+import { Pagination } from "@/components/Pagination";
+import { paging, searchText, type ListParams } from "@/lib/paging";
+import type { Prisma } from "@prisma/client";
 
-export default async function WholesaleDeskPage() {
+const CLOSED = ["DELIVERED", "DECLINED", "CANCELLED"];
+
+export default async function WholesaleDeskPage({ searchParams }: { searchParams: Promise<ListParams> }) {
   const user = await requireUser();
-  if (!user || !canWholesale(user.role)) redirect("/dashboard");
+  if (!user || !isStaff(user.role)) redirect("/dashboard");
 
-  const orders = await db.consignment.findMany({
-    include: { institution: true, requestedBy: true, items: true },
-    orderBy: { createdAt: "desc" },
-  });
-  const open = orders.filter((o) => !["DELIVERED", "DECLINED", "CANCELLED"].includes(o.status));
-  const awaitingQuote = orders.filter((o) => o.status === "REQUESTED");
-  const quotedValue = orders
-    .filter((o) => o.quotedAmount && !["DECLINED", "CANCELLED"].includes(o.status))
-    .reduce((sum, o) => sum + (o.quotedAmount ?? 0), 0);
+  const params = await searchParams;
+  const { page, take, skip, pageSize } = paging(params);
+  const q = searchText(params);
+  const status = params.status && params.status in STATUS_LABEL ? params.status : undefined;
+  const where: Prisma.ConsignmentWhereInput = {
+    ...(status ? { status } : {}),
+    ...(q ? { OR: [{ reference: { contains: q } }, { institution: { name: { contains: q } } }] } : {}),
+  };
+  // Headline numbers are counted by the database; only one page of orders is loaded.
+  const [orders, total, openCount, awaitingQuote, quoted] = await Promise.all([
+    db.consignment.findMany({
+      where,
+      include: { institution: true, _count: { select: { items: true } } },
+      orderBy: { createdAt: "desc" },
+      take,
+      skip,
+    }),
+    db.consignment.count({ where }),
+    db.consignment.count({ where: { status: { notIn: CLOSED } } }),
+    db.consignment.count({ where: { status: "REQUESTED" } }),
+    db.consignment.aggregate({ where: { status: { notIn: ["DECLINED", "CANCELLED"] } }, _sum: { quotedAmount: true } }),
+  ]);
+  const quotedValue = quoted._sum.quotedAmount ?? 0;
 
   return (
     <div>
       <PageHeader
         title="Wholesale orders"
-        description="Hospitals, clinics, and pharmacies send order requests. Reply with a price in Kwacha and when the order will be ready."
+        description="Hospitals, clinics, pharmacies and schools send order requests. Finance replies with a price in Kwacha; sales moves the order through to delivery."
       />
+      <FinishSetup />
       <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <StatCard label="Open orders" value={String(open.length)} hint="Not finished yet" />
-        <StatCard label="Waiting for a price" value={String(awaitingQuote.length)} hint="New requests" />
+        <StatCard label="Open orders" value={String(openCount)} hint="Not finished yet" />
+        <StatCard label="Waiting for a price" value={String(awaitingQuote)} hint="New requests" />
         <StatCard label="Quoted total" value={money(quotedValue, "ZMW")} hint="Amount offered to buyers" />
       </div>
       <section className="overflow-hidden rounded-2xl border border-pine-900/10 bg-white p-4 shadow-panel">
-        <SearchScope placeholder="Search order number or organisation">
+        <div className="mb-3 grid gap-3 sm:grid-cols-[1fr_220px]">
+          <ListSearch placeholder="Search order number or organisation" />
+          <ListFilter param="status" label="Status" options={[
+            { value: "", label: "All statuses" },
+            ...Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })),
+          ]} />
+        </div>
+        <div className="overflow-x-auto">
         <table className="table-grid">
           <thead>
             <tr>
@@ -50,10 +78,7 @@ export default async function WholesaleDeskPage() {
           </thead>
           <tbody>
             {orders.map((order) => (
-              <tr
-                key={order.id}
-                data-search={`${order.reference} ${order.institution.name} ${order.institution.kind} ${order.status} ${STATUS_LABEL[order.status] ?? ""}`.toLowerCase()}
-              >
+              <tr key={order.id}>
                 <td>
                   <Link href={`/wholesale/${order.id}`} className="font-mono text-xs hover:underline">
                     {order.reference}
@@ -64,7 +89,7 @@ export default async function WholesaleDeskPage() {
                   <p>{order.institution.name}</p>
                   <p className="text-xs text-ink/60">{KIND_LABEL[order.institution.kind] ?? order.institution.kind}</p>
                 </td>
-                <td>{order.items.length}</td>
+                <td>{order._count.items}</td>
                 <td>{order.quotedAmount != null ? money(order.quotedAmount, "ZMW") : "—"}</td>
                 <td>{order.readyOn ? format(order.readyOn, "dd MMM yyyy") : "—"}</td>
                 <td>
@@ -72,9 +97,17 @@ export default async function WholesaleDeskPage() {
                 </td>
               </tr>
             ))}
+            {orders.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-ink/60">
+                  {q || status ? "No orders match." : "No orders yet. They appear here when a buyer sends a request."}
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
-        </SearchScope>
+        </div>
+        <Pagination page={page} pageSize={pageSize} total={total} basePath="/wholesale" params={params} />
       </section>
     </div>
   );

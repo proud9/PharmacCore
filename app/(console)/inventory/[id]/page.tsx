@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { db } from "@/lib/db";
+import { getPharmacy } from "@/lib/pharmacy";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { money, stockOf } from "@/lib/utils";
@@ -16,7 +17,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     include: { batches: { orderBy: { expiryDate: "asc" } }, category: true, supplier: true },
   });
   if (!product) notFound();
-  const pharmacy = await db.pharmacy.findUnique({ where: { id: "main" } });
+  const pharmacy = await getPharmacy();
   const qty = stockOf(product.batches);
   const soon = expiryWindow();
 

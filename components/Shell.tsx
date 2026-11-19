@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   Boxes,
   ClipboardCheck,
@@ -21,6 +21,8 @@ import {
   Building2,
   PackagePlus,
   Inbox,
+  Wallet,
+  Factory,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -31,44 +33,40 @@ import { HeaderSearch } from "@/components/search/HeaderSearch";
 
 const COLLAPSE_KEY = "pharmacore:sidebar-collapsed";
 
-const RETAIL_NAV = [
-  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
-  { href: "/pos", label: "Sales counter", icon: ShoppingCart },
-  { href: "/inventory", label: "Inventory", icon: Boxes },
-  { href: "/stock-take", label: "Stock take", icon: ClipboardCheck },
-  { href: "/patients", label: "Patients", icon: Users },
-  { href: "/prescriptions", label: "Prescriptions", icon: FileText },
-  { href: "/sales", label: "Sales", icon: Receipt },
-  { href: "/purchases", label: "Purchases", icon: Truck },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/staff", label: "Staff", icon: Stethoscope },
-  { href: "/audit", label: "Activity log", icon: ScrollText },
-  { href: "/settings", label: "Pharmacy details", icon: Settings },
-];
+type NavItem = { href: string; label: string; icon: typeof Boxes };
 
-const WHOLESALE_NAV = [
-  { href: "/wholesale", label: "Wholesale orders", icon: Warehouse },
-  { href: "/wholesale/accounts", label: "Buyers", icon: Building2 },
-];
+const HOME: NavItem = { href: "/dashboard", label: "Home", icon: LayoutDashboard };
+const ORDERS: NavItem = { href: "/wholesale", label: "Wholesale orders", icon: Warehouse };
+const PAYMENTS: NavItem = { href: "/wholesale/payments", label: "Payments", icon: Wallet };
+const BUYERS: NavItem = { href: "/wholesale/accounts", label: "Buyers", icon: Building2 };
+const POS: NavItem = { href: "/pos", label: "Sales counter", icon: ShoppingCart };
+const INVENTORY: NavItem = { href: "/inventory", label: "Inventory", icon: Boxes };
+const STOCK_TAKE: NavItem = { href: "/stock-take", label: "Stock take", icon: ClipboardCheck };
+const PATIENTS: NavItem = { href: "/patients", label: "Patients", icon: Users };
+const PRESCRIPTIONS: NavItem = { href: "/prescriptions", label: "Prescriptions", icon: FileText };
+const SALES: NavItem = { href: "/sales", label: "Sales", icon: Receipt };
+const PURCHASES: NavItem = { href: "/purchases", label: "Purchases", icon: Truck };
+const REPORTS: NavItem = { href: "/reports", label: "Reports", icon: BarChart3 };
+const MAKERS: NavItem = { href: "/purchases/manufacturers", label: "Manufacturers", icon: Factory };
+const STAFF: NavItem = { href: "/staff", label: "Staff", icon: Stethoscope };
+const AUDIT: NavItem = { href: "/audit", label: "Activity log", icon: ScrollText };
+const COMPANY: NavItem = { href: "/settings", label: "Company details", icon: Settings };
+const DEMOS: NavItem = { href: "/demo-requests", label: "Demo requests", icon: Inbox };
 
-const WHOLESALE_ADMIN_NAV = [
-  { href: "/wholesale", label: "Wholesale orders", icon: Warehouse },
-  { href: "/wholesale/accounts", label: "Buyers", icon: Building2 },
-  { href: "/inventory", label: "Inventory", icon: Boxes },
-  { href: "/audit", label: "Activity log", icon: ScrollText },
-  { href: "/settings", label: "Pharmacy details", icon: Settings },
-];
-
-const BUYER_NAV = [
-  { href: "/portal", label: "My orders", icon: Warehouse },
-  { href: "/portal/new", label: "New order", icon: PackagePlus },
-];
+/** Sidebar per role. Page and API guards in lib/auth.ts are what actually enforce access. */
+const NAV: Record<string, NavItem[]> = {
+  ADMIN: [HOME, ORDERS, PAYMENTS, BUYERS, POS, INVENTORY, STOCK_TAKE, PATIENTS, PRESCRIPTIONS, SALES, PURCHASES, MAKERS, REPORTS, STAFF, AUDIT, COMPANY, DEMOS],
+  FINANCE: [PAYMENTS, ORDERS, HOME, SALES, PURCHASES, MAKERS, REPORTS, INVENTORY, AUDIT, COMPANY],
+  SALES: [ORDERS, HOME, BUYERS, POS, INVENTORY, STOCK_TAKE, PATIENTS, PRESCRIPTIONS, SALES, PURCHASES, MAKERS, AUDIT],
+  BUYER: [
+    { href: "/portal", label: "My orders", icon: Warehouse },
+    { href: "/portal/new", label: "New order", icon: PackagePlus },
+  ],
+  MANUFACTURER: [{ href: "/supplier", label: "Orders", icon: Truck }],
+};
 
 function navFor(role: string) {
-  if (role === "BUYER") return BUYER_NAV;
-  if (role === "WHOLESALE_ADMIN") return WHOLESALE_ADMIN_NAV;
-  if (role === "ADMIN") return [...WHOLESALE_NAV, ...RETAIL_NAV, { href: "/demo-requests", label: "Demo requests", icon: Inbox }];
-  return RETAIL_NAV;
+  return NAV[role] ?? [];
 }
 
 export function Shell({
@@ -85,8 +83,11 @@ export function Shell({
   pharmacy: string;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const nav = navFor(roleCode);
+  // The longest matching link wins, so /wholesale/payments doesn't also light up /wholesale.
+  const activeHref = nav
+    .filter((item) => pathname === item.href || (item.href !== "/portal" && pathname.startsWith(`${item.href}/`)))
+    .sort((x, y) => y.href.length - x.href.length)[0]?.href;
   // Desktop: collapsed to an icon rail (remembered per browser). Mobile: menu opens as a drawer.
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -117,8 +118,9 @@ export function Shell({
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    // A full load on purpose: it empties the client page cache, so the next person to sign in on
+    // this computer never sees the previous user's pages.
+    window.location.assign("/login");
   }
 
   return (
@@ -136,7 +138,7 @@ export function Shell({
           )}
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white p-1">
-            <img src="/brand/parallax-logo.png" alt="" width={32} height={32} className="h-8 w-8" />
+            <img src="/brand/parallax-logo-96.png" alt="" width={32} height={32} className="h-8 w-8" />
           </div>
           <div className={cn("min-w-0 flex-1", collapsed && "lg:hidden")}>
             <p className="font-display text-lg font-semibold leading-none">Parallax</p>
@@ -159,8 +161,7 @@ export function Shell({
           className={cn("space-y-0.5 p-3 lg:block lg:flex-1 lg:overflow-y-auto", mobileOpen ? "block" : "hidden")}
         >
           {nav.map((item) => {
-            const active =
-              pathname === item.href || (item.href !== "/portal" && pathname.startsWith(`${item.href}/`));
+            const active = item.href === activeHref;
             const Icon = item.icon;
             return (
               <Link
@@ -205,7 +206,15 @@ export function Shell({
             </p>
           </div>
           <div className="min-w-[220px] flex-1">
-            <HeaderSearch />
+            <HeaderSearch
+              placeholder={
+                roleCode === "BUYER"
+                  ? "Search orders, wholesalers…"
+                  : roleCode === "FINANCE"
+                    ? "Search orders, invoices, products…"
+                    : "Search products, patients, orders…"
+              }
+            />
           </div>
           <button onClick={logout} className="btn btn-ghost">
             <LogOut className="h-4 w-4" />

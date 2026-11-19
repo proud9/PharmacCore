@@ -12,11 +12,14 @@ model User {
   email          String          @unique
   name           String
   passwordHash   String
-  role           String          @default("CASHIER")
+  role           String          @default("SALES")
   active         Boolean         @default(true)
   lastLoginAt    DateTime?
   institutionId  String?
   institution    Institution?    @relation(fields: [institutionId], references: [id])
+  /// MANUFACTURER accounts belong to one Supplier (one account per manufacturer).
+  supplierId     String?
+  supplier       Supplier?       @relation(fields: [supplierId], references: [id])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   sales          Sale[]
@@ -44,6 +47,8 @@ model Patient {
   updatedAt     DateTime       @updatedAt
   prescriptions Prescription[]
   sales         Sale[]
+
+  @@index([lastName, firstName])
 }
 
 model Supplier {
@@ -56,6 +61,7 @@ model Supplier {
   createdAt      DateTime        @default(now())
   products       Product[]
   purchaseOrders PurchaseOrder[]
+  users          User[]
 }
 
 model Category {
@@ -102,6 +108,10 @@ model Product {
   prescriptionItems PrescriptionItem[]
   consignmentItems  ConsignmentItem[]
   intakes           StockIntake[]
+
+  @@index([active, sku])
+  @@index([active, name])
+  @@index([deletedAt])
 }
 
 model Batch {
@@ -112,6 +122,9 @@ model Batch {
   expiryDate DateTime
   quantity   Int
   receivedAt DateTime @default(now())
+
+  @@index([productId, quantity])
+  @@index([quantity, expiryDate])
 }
 
 model PurchaseOrder {
@@ -121,13 +134,48 @@ model PurchaseOrder {
   supplier       Supplier            @relation(fields: [supplierId], references: [id])
   createdById    String
   createdBy      User                @relation(fields: [createdById], references: [id])
-  status         String              @default("DRAFT")
+  /// See lib/purchasing.ts: SENT → QUOTED → ACCEPTED → DISPATCHED → RECEIVED, or DECLINED / CANCELLED.
+  status         String              @default("SENT")
   notes          String?
   createdAt      DateTime            @default(now())
   receivedAt     DateTime?
   items          PurchaseOrderItem[]
   deliveryNoteNo String?
   intakes        StockIntake[]
+  events         PurchaseOrderEvent[]
+  // Manufacturer's quotation
+  quotedAmount    Float?
+  taxRate         Float              @default(0)
+  readyOn         DateTime?
+  validUntil      DateTime?
+  quotedAt        DateTime?
+  supplierMessage String?
+  terms           String?
+  // Manufacturer's invoice; finance records what has been paid
+  invoiceNo       String?
+  invoicedAt      DateTime?
+  dueOn           DateTime?
+  amountPaid      Float              @default(0)
+  // Manufacturer's dispatch
+  dispatchedAt    DateTime?
+  deliveryMethod  String?
+
+  @@index([createdAt])
+  @@index([supplierId, createdAt])
+  @@index([status, createdAt])
+  @@index([dueOn])
+}
+
+model PurchaseOrderEvent {
+  id        String        @id @default(cuid())
+  orderId   String
+  order     PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    String
+  message   String?
+  actorName String?
+  createdAt DateTime      @default(now())
+
+  @@index([orderId, createdAt])
 }
 
 model PurchaseOrderItem {
@@ -137,7 +185,13 @@ model PurchaseOrderItem {
   productId String
   product   Product       @relation(fields: [productId], references: [id])
   quantity  Int
-  unitCost  Float
+  /// Expected cost when ordered; replaced by the manufacturer's quoted price.
+  unitCost  Float         @default(0)
+  /// Quantity on the manufacturer's delivery note.
+  qtyDispatched Int?
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 model Prescription {
@@ -154,6 +208,9 @@ model Prescription {
   createdAt    DateTime           @default(now())
   dispensedAt  DateTime?
   items        PrescriptionItem[]
+
+  @@index([status, createdAt])
+  @@index([patientId])
 }
 
 model PrescriptionItem {
@@ -165,6 +222,9 @@ model PrescriptionItem {
   quantity       Int
   dosage         String?
   instructions   String?
+
+  @@index([prescriptionId])
+  @@index([productId])
 }
 
 model Sale {
@@ -181,6 +241,9 @@ model Sale {
   payment   String     @default("CASH")
   createdAt DateTime   @default(now())
   items     SaleItem[]
+
+  @@index([createdAt])
+  @@index([patientId])
 }
 
 model SaleItem {
@@ -192,6 +255,9 @@ model SaleItem {
   quantity  Int
   unitPrice Float
   total     Float
+
+  @@index([saleId])
+  @@index([productId])
 }
 
 model StockTake {
@@ -204,6 +270,8 @@ model StockTake {
   startedAt   DateTime        @default(now())
   completedAt DateTime?
   items       StockTakeItem[]
+
+  @@index([startedAt])
 }
 
 model StockTakeItem {
@@ -216,6 +284,9 @@ model StockTakeItem {
   countedQty  Int
   variance    Int
   unitPrice   Float     @default(0)
+
+  @@index([stockTakeId])
+  @@index([productId])
 }
 
 model AuditLog {
@@ -227,6 +298,8 @@ model AuditLog {
   entityId  String?
   details   String?
   createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model Pharmacy {
@@ -294,6 +367,11 @@ model Consignment {
   quotedAt        DateTime?
   items           ConsignmentItem[]
   events          ConsignmentEvent[]
+
+  @@index([institutionId, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@index([dueOn])
 }
 
 model ConsignmentItem {
@@ -307,6 +385,9 @@ model ConsignmentItem {
   qtyDelivered  Int?
   remarks       String?
   notes         String?
+
+  @@index([consignmentId])
+  @@index([productId])
 }
 
 model ConsignmentEvent {
@@ -317,6 +398,8 @@ model ConsignmentEvent {
   message       String?
   actorName     String?
   createdAt     DateTime    @default(now())
+
+  @@index([consignmentId])
 }
 
 /// A delivered supplier line waiting in Inventory for its expiry, price and
@@ -336,6 +419,9 @@ model StockIntake {
   expiryDate      DateTime?
   createdAt       DateTime       @default(now())
   completedAt     DateTime?
+
+  @@index([status, createdAt])
+  @@index([productId])
 }
 
 /// "Request a demo" submissions from the public landing page. Administrators see them under Demo requests.
@@ -349,4 +435,6 @@ model DemoRequest {
   createdAt     DateTime  @default(now())
   contactedAt   DateTime?
   contactedById String?
+
+  @@index([createdAt])
 }

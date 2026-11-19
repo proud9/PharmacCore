@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { homePath } from "@/lib/paths";
 
-const PUBLIC = ["/", "/login", "/api/auth/login", "/api/auth/register", "/api/demo-requests"];
+const PUBLIC = ["/", "/login", "/setup", "/terms", "/privacy", "/api/auth/signout", "/api/setup", "/api/auth/login", "/api/auth/register", "/api/demo-requests"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -61,6 +61,23 @@ export async function middleware(request: NextRequest) {
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/portal";
+    return NextResponse.redirect(url);
+  }
+
+  if (
+    role === "MANUFACTURER" &&
+    !pathname.startsWith("/supplier") &&
+    !pathname.startsWith("/api/") &&
+    !pathname.startsWith("/documents")
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/supplier";
+    return NextResponse.redirect(url);
+  }
+
+  if (role !== "MANUFACTURER" && pathname.startsWith("/supplier")) {
+    const url = request.nextUrl.clone();
+    url.pathname = homePath(role);
     return NextResponse.redirect(url);
   }
 

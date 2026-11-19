@@ -2,19 +2,20 @@ import { format } from "date-fns";
 import { notFound } from "next/navigation";
 import { DocumentFrame } from "@/components/documents/DocumentFrame";
 import { InvoiceSheet } from "@/components/documents/InvoiceSheet";
-import { isBuyer, requireUser } from "@/lib/auth";
+import { isStaff, requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getPharmacy } from "@/lib/pharmacy";
 
 export default async function SaleInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
-  if (!user || isBuyer(user.role)) notFound();
+  if (!user || !isStaff(user.role)) notFound();
   const { id } = await params;
   const [sale, pharmacy] = await Promise.all([
     db.sale.findUnique({
       where: { id },
       include: { cashier: true, patient: true, items: { include: { product: true } } },
     }),
-    db.pharmacy.findUnique({ where: { id: "main" } }),
+    getPharmacy(),
   ]);
   if (!sale || !pharmacy) notFound();
 
