@@ -99,6 +99,11 @@ npm run demo -- --seed
 
 This serves Parallax on `0.0.0.0:3000` from its own database (`parallax_demo`) and prints the address for other computers on the same network. Use `--reset` instead of `--seed` for an empty installation. The demo runs over plain HTTP: use it on a trusted network only.
 
+For a live presentation where each device creates its own account, follow [docs/demo/README.md](docs/demo/README.md):
+- `npm run demo:rehearse` plays the whole script over this computer's network address (on its own database) and must pass before the day.
+- `npm run demo:files` makes the wholesaler's opening-stock sheet.
+- `npm run demo:admin -- --email team@demo.local --name "Parallax Team"` creates the team login on the demo database.
+
 ## Tests
 
 ```bash

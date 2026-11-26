@@ -457,9 +457,12 @@ model Notification {
   title     String
   body      String?
   link      String?
+  /// Set on reminders Parallax adds by itself (e.g. "sub:due:2026-12-01"), so each is added once.
+  dedupeKey String?
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
+  @@unique([orgId, dedupeKey])
   @@index([orgId, readAt, createdAt])
 }
 

@@ -47,7 +47,7 @@ function ItemFields({ item }: { item?: CatalogRow }) {
         <label>Your list price (ZMW, private)</label>
         <input name="sellingPrice" type="number" min={0} step="0.01" required defaultValue={item?.sellingPrice ?? 0} />
       </div>
-      <label className="flex items-center gap-2 text-sm">
+      <label className="flex items-center gap-2 text-sm font-normal normal-case tracking-normal text-ink">
         <input type="checkbox" name="offered" defaultChecked={item?.offered ?? true} className="w-auto" />
         Show to connected buyers
       </label>

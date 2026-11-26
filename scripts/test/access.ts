@@ -120,6 +120,31 @@ export async function accessSuite(base: string, db: PrismaClient, env: NodeJS.Pr
   check("an account in its grace period can still write", grace.status === 201, String(grace.status));
   check("…and sees a payment-due notice", (await copper.page("/dashboard")).html.includes("payment is due"));
 
+  section("Bell reminders");
+  const kinds = async (name: string) => (await db.organization.findFirstOrThrow({ where: { name: { contains: name } } })).id;
+  const notesFor = (orgId: string, prefix: string) => db.notification.count({ where: { orgId, dedupeKey: { startsWith: prefix } } });
+  const copperId = await kinds("Copperbelt");
+  await copper.page("/dashboard");
+  check("payment due: a reminder in the bell", (await notesFor(copperId, "sub:due:")) === 1);
+  await copper.page("/orders");
+  check("…added only once", (await notesFor(copperId, "sub:")) === 1);
+  const kabwe = await login("kabwe@parallax.local");
+  check("trial ending within a week: listed on the very first visit to Notifications", (await kabwe.page("/notifications")).html.includes("Your free trial ends on"));
+  await kabwe.page("/dashboard");
+  check("…and added once", (await notesFor(await kinds("Kabwe"), "sub:trial-ending:")) === 1);
+  const apex = await login("apex@parallax.local");
+  await apex.page("/dashboard");
+  check("read-only: a reminder", (await notesFor(await kinds("Apex"), "sub:read-only:")) === 1);
+  const centralId = await kinds("Lusaka Central");
+  check("paid up for months: no reminder", (await notesFor(centralId, "sub:")) === 0);
+  const hope = await login("hope@parallax.local");
+  await hope.page("/dashboard");
+  check("clients (free): no reminder", (await notesFor(await kinds("Hope"), "sub:")) === 0);
+  check("the reminder links to Billing", (await copper.page("/notifications")).html.includes('href="/billing"'));
+  const nav = async (client: Awaited<ReturnType<typeof login>>) => (await client.page("/guide")).html.includes('href="/billing"');
+  check("Billing is in the menu for paying accounts", await nav(apex));
+  check("…and not for clients", !(await nav(hope)));
+
   section("Database locks");
   const rls = runScript(env, "scripts/test/rls-check.ts");
   const lines = rls.stdout.split("\n").filter((line) => /^(PASS|FAIL) /.test(line));

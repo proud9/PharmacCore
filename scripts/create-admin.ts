@@ -1,11 +1,12 @@
 /**
  * Creates a Parallax team (ADMIN) login. There is no public way to make one.
  *   npm run admin:create -- --email you@parallax.example --name "Your Name"
+ *   npm run demo:admin -- --email team@demo.local --name "Parallax Team"   (the LAN demo's database)
  * Prints a temporary password, which must be changed at first sign-in.
  */
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
-import { loadEnv } from "./db";
+import { envForDatabase, loadEnv } from "./db";
 import { temporaryPassword } from "../lib/passwords";
 
 function arg(name: string) {
@@ -15,6 +16,8 @@ function arg(name: string) {
 
 async function main() {
   loadEnv();
+  // --demo: the LAN demo's own database (scripts/demo.ts), not the one in .env.
+  if (process.argv.includes("--demo")) Object.assign(process.env, envForDatabase("parallax_demo"));
   const email = arg("email")?.toLowerCase();
   const name = arg("name");
   if (!email || !name) {

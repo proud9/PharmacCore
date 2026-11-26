@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { pageTenant } from "@/lib/tenant";
+import { subscriptionReminders } from "@/lib/reminders";
 import { db as platform } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { MarkAllRead } from "@/components/forms/MarkAllRead";
@@ -8,6 +9,8 @@ import { MarkAllRead } from "@/components/forms/MarkAllRead";
 /** Business events (new inquiry, quote received, dispatched…) and messages from the Parallax team. */
 export default async function NotificationsPage() {
   const t = await pageTenant();
+  // The layout adds due reminders too, but renders alongside this page: add them first so they are listed.
+  await subscriptionReminders(t);
   const { db, org, user } = t;
   const [notes, announcements] = await Promise.all([
     db.notification.findMany({ orderBy: { createdAt: "desc" }, take: 60 }),

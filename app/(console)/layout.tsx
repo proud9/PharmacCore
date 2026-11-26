@@ -5,8 +5,9 @@ import { db } from "@/lib/db";
 import { can, ROLE_LABEL, type Capability } from "@/lib/capabilities";
 import { subscriptionState } from "@/lib/subscription";
 import { Shell } from "@/components/Shell";
+import { subscriptionReminders } from "@/lib/reminders";
 
-const CAPS: Capability[] = ["sell", "buy", "inventory", "counter", "catalog"];
+const CAPS: Capability[] = ["sell", "buy", "inventory", "counter", "catalog", "billing"];
 
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
   const t = await getTenant();
@@ -18,6 +19,8 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   }
   const { org, user } = t;
   if (user.mustChangePassword) redirect("/account/password");
+  // Adds any due subscription reminder or payment thank-you to the bell (each only once).
+  await subscriptionReminders(t);
 
   const [unreadNotes, unreadAnnouncements] = await Promise.all([
     t.db.notification.count({ where: { readAt: null } }),

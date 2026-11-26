@@ -330,6 +330,7 @@ export async function workflowSuite(base: string, db: PrismaClient, env: NodeJS.
   check("clients have no Billing page", (await clinic.page("/billing")).path === "/dashboard");
   const paymentsView = await team.page("/admin/billing?view=payments&q=ZAN-SUB-1");
   check("team finds the payment by its reference", paymentsView.html.includes(String(renew.data.receiptNo)));
+  check("the wholesaler is thanked in the bell, with the receipt", (await whole.page("/notifications")).html.includes(`Receipt ${renew.data.receiptNo}`));
   check("team account page shows the history", (await team.page(`/admin/billing/${W}`)).html.includes(String(second.data.receiptNo)));
 
   section("Logs and wording");

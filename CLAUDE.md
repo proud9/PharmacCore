@@ -56,6 +56,8 @@ npm run dev          # http://localhost:3000
 npm run build && npm start
 npm test             # end-to-end on throwaway Postgres databases (add -- --build after code changes)
 npm run demo         # LAN demo on database parallax_demo (-- --reset empty, -- --seed demo data)
+npm run demo:admin -- --email team@demo.local --name "Parallax Team"   # team login on the demo database
+npm run demo:rehearse   # plays docs/demo/README.md end to end over the LAN address (own database); run before presenting
 npx tsx scripts/test/rls-check.ts   # database-level isolation checks against your own database
 npx tsx scripts/guide-shots.ts      # re-take the guide screenshots (public/guide) from a seeded copy
 ```
@@ -191,5 +193,4 @@ public/guide/             Guide screenshots (made by scripts/guide-shots.ts; do 
 
 ## Known issues
 
-- Reports cover the retail counter only; there is no trade report yet.
-- The sign-in rate limit is in memory (one server process).
+Open work and limitations are listed in [docs/backlog.md](docs/backlog.md) (trade report, per-business encryption keys, setup steps after sign-up, online payments, in-memory rate limit, clean-ups on page load). Update it when you finish or find something.

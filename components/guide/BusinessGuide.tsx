@@ -682,7 +682,7 @@ function subscription(): GuideSection {
         <Note title="Paying online">
           Paying by card or mobile money straight from the Billing page is coming. Your receipt will then appear as soon as the payment goes through.
         </Note>
-        <p>When a payment is due, a notice at the top of every page links to Billing. Your connections and orders carry on through every stage.</p>
+        <p>A week before your trial or paid period ends, when a payment is due, and if the account becomes read-only, a reminder arrives in the bell and a notice at the top of every page links to Billing. When the team records your payment, the bell thanks you with the receipt. Your connections and orders carry on through every stage.</p>
       </>
     ),
   };
