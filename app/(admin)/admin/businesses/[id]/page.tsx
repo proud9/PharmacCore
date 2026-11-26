@@ -5,13 +5,12 @@ import { ArrowLeft } from "lucide-react";
 import { adminDb } from "@/lib/db";
 import { ROLE_LABEL } from "@/lib/capabilities";
 import { SUBSCRIPTION_LABEL, pays, subscriptionState } from "@/lib/subscription";
-import { money } from "@/lib/utils";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
-import { BusinessProfileForm, BusinessStatusActions, LoginActions, SubscriptionForm } from "@/components/admin/BusinessForms";
+import { BusinessProfileForm, BusinessStatusActions, LoginActions } from "@/components/admin/BusinessForms";
 
 /**
- * One business, as the Parallax team sees it: account details, logins and subscription.
+ * One business, as the Parallax team sees it: account details and login. Billing is on /admin/billing/[orgId].
  * Its stock, orders, prices and documents are not available here (and not to this database role).
  */
 export default async function AdminBusinessPage({ params }: { params: Promise<{ id: string }> }) {
@@ -33,7 +32,7 @@ export default async function AdminBusinessPage({ params }: { params: Promise<{ 
       deletedAt: true,
       createdAt: true,
       users: { select: { id: true, name: true, email: true, active: true, lastLoginAt: true, mustChangePassword: true } },
-      subscription: { include: { payments: { orderBy: { paidOn: "desc" }, take: 10 } } },
+      subscription: { select: { periodEnd: true, trialEndsAt: true } },
     },
   });
   if (!org) notFound();
@@ -89,40 +88,18 @@ export default async function AdminBusinessPage({ params }: { params: Promise<{ 
         </section>
         <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="font-display text-xl text-pine-900">Subscription</h2>
+            <h2 className="font-display text-xl text-pine-900">Billing</h2>
             <Badge tone={sub.state === "READ_ONLY" ? "bad" : sub.state === "GRACE" ? "warn" : "neutral"}>{SUBSCRIPTION_LABEL[sub.state]}</Badge>
           </div>
           {pays(org.kind) ? (
             <>
               <p className="mt-1 text-sm text-ink/60">
-                {sub.periodEnd ? `Paid up to ${format(sub.periodEnd, "dd MMM yyyy")}.` : "No subscription yet."}{" "}
-                {sub.readOnlyOn ? `Read-only from ${format(sub.readOnlyOn, "dd MMM yyyy")} if not renewed.` : ""}
+                {sub.periodEnd ? `${sub.state === "TRIAL" ? "Trial ends" : "Paid up to"} ${format(sub.periodEnd, "dd MMM yyyy")}.` : "No subscription yet."} Payments,
+                receipts and the fee are on its billing page.
               </p>
-              <SubscriptionForm orgId={org.id} />
-              {org.subscription?.payments.length ? (
-                <table className="table-grid mt-4">
-                  <thead>
-                    <tr>
-                      <th>Paid on</th>
-                      <th>Amount</th>
-                      <th>Covers</th>
-                      <th>Reference</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {org.subscription.payments.map((payment) => (
-                      <tr key={payment.id}>
-                        <td>{format(payment.paidOn, "dd MMM yyyy")}</td>
-                        <td>{money(payment.amount)}</td>
-                        <td>
-                          {format(payment.periodStart, "dd MMM yyyy")} – {format(payment.periodEnd, "dd MMM yyyy")}
-                        </td>
-                        <td>{payment.reference ?? "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : null}
+              <Link href={`/admin/billing/${org.id}`} className="btn btn-ghost mt-3">
+                Open billing
+              </Link>
             </>
           ) : (
             <p className="mt-1 text-sm text-ink/60">Clients use Parallax free of charge.</p>

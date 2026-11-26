@@ -45,12 +45,12 @@ export function customerKinds(kind: string): OrgKind[] {
   return TRADE_PAIRS.filter((pair) => pair.seller === kind).map((pair) => pair.buyer);
 }
 
-export type Capability = "sell" | "buy" | "inventory" | "counter" | "catalog";
+export type Capability = "sell" | "buy" | "inventory" | "counter" | "catalog" | "billing";
 
 const CAPS: Record<OrgKind, readonly Capability[]> = {
-  MANUFACTURER: ["sell", "catalog"],
-  WHOLESALER: ["sell", "buy", "inventory", "catalog"],
-  RETAILER: ["sell", "buy", "inventory", "catalog", "counter"],
+  MANUFACTURER: ["sell", "catalog", "billing"],
+  WHOLESALER: ["sell", "buy", "inventory", "catalog", "billing"],
+  RETAILER: ["sell", "buy", "inventory", "catalog", "counter", "billing"],
   CLIENT: ["buy"],
 };
 

@@ -1,12 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { BookOpen, Building2, Inbox, LayoutDashboard, LogOut, Megaphone, ScrollText } from "lucide-react";
+import { BookOpen, Building2, CreditCard, Inbox, LayoutDashboard, LogOut, Megaphone, ScrollText } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 
 const NAV = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/businesses", label: "Businesses", icon: Building2 },
+  { href: "/admin/billing", label: "Billing", icon: CreditCard },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
   { href: "/admin/demo-requests", label: "Demo requests", icon: Inbox },
   { href: "/admin/activity", label: "Team activity", icon: ScrollText },

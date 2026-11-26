@@ -43,15 +43,22 @@ export default async function AdminOverview() {
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
-          <h2 className="font-display text-xl text-pine-900">Subscriptions to follow up</h2>
-          <p className="mb-4 text-sm text-ink/60">Ending within 14 days, payment due, or read-only.</p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="font-display text-xl text-pine-900">Subscriptions to follow up</h2>
+              <p className="mb-4 text-sm text-ink/60">Ending within 14 days, payment due, or read-only.</p>
+            </div>
+            <Link href="/admin/billing?status=attention" className="btn btn-ghost">
+              Open billing
+            </Link>
+          </div>
           {attention.length === 0 ? (
             <p className="text-sm text-ink/60">Nothing due.</p>
           ) : (
             <ul className="divide-y divide-pine-900/10 text-sm">
               {attention.map((sub) => (
                 <li key={sub.org.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                  <Link href={`/admin/businesses/${sub.org.id}`} className="font-semibold text-pine-800 hover:underline">
+                  <Link href={`/admin/billing/${sub.org.id}`} className="font-semibold text-pine-800 hover:underline">
                     {sub.org.name}
                   </Link>
                   <span className="text-ink/60">Ends {format(sub.periodEnd, "dd MMM yyyy")}</span>

@@ -81,6 +81,8 @@ model Subscription {
   plan        String                @default("STANDARD")
   trialEndsAt DateTime?
   periodEnd   DateTime
+  /// Agreed price per month in ZMW, set by the team. Null until agreed.
+  monthlyFee  Float?
   notes       String?
   createdAt   DateTime              @default(now())
   updatedAt   DateTime              @updatedAt
@@ -89,18 +91,34 @@ model Subscription {
   @@index([periodEnd])
 }
 
+/// One subscription payment and its receipt. Recorded by the team today (source MANUAL); a card or
+/// mobile-money provider will add rows itself later (source ONLINE, provider + providerRef, status
+/// PENDING until confirmed). Only PAID rows count. Businesses can read their own rows (RLS), never write.
 model SubscriptionPayment {
   id             String       @id @default(cuid())
   subscriptionId String
   subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  orgId          String
+  orgName        String
+  receiptNo      String       @unique
   amount         Float
   paidOn         DateTime
+  months         Int          @default(1)
   periodStart    DateTime
   periodEnd      DateTime
+  method         String       @default("BANK_TRANSFER")
+  source         String       @default("MANUAL")
+  status         String       @default("PAID")
+  provider       String?
+  providerRef    String?
   reference      String?
   recordedById   String?
+  recordedByName String?
   createdAt      DateTime     @default(now())
 
+  @@unique([provider, providerRef])
+  @@index([orgId, paidOn])
+  @@index([paidOn])
   @@index([subscriptionId, paidOn])
 }
 

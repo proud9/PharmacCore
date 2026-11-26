@@ -20,6 +20,7 @@ import { READ_ONLY_MESSAGE, subscriptionState } from "./subscription";
  * Creates must still pass `orgId: t.org.id` (Prisma's types require it; RLS rejects any other).
  */
 export const OWNED = new Set<string>([
+  "SubscriptionPayment",
   "Category",
   "Product",
   "Batch",

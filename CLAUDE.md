@@ -14,12 +14,13 @@ Read [DESIGN.md](DESIGN.md) before touching any UI.
 2. **Trade between businesses**: directory and connections, item lists without prices, the unified order flow, printable documents, private contact lists for businesses not on Parallax, payments recorded by the seller.
 3. **Inventory** (wholesalers, retailers): items, batches, expiry, delivery queue, stock take, delete queue. **Item list only** for manufacturers.
 4. **Retail counter** (retailers only): sales counter, patients, prescriptions, counter sales, reports.
-5. **Parallax team area** (`/admin`): businesses, logins (create, reset, switch off), subscriptions recorded by hand, announcements, demo requests, team activity. It never sees business data.
-6. **In-app notifications** (order events, connection requests, team announcements).
+5. **Parallax team area** (`/admin`): businesses, logins (create, reset, switch off), billing (who is due or overdue, mark as paid with numbered receipts, fees, suspend), announcements, demo requests, team activity. It never sees business data.
+6. **Billing for paying businesses** (`/billing`): subscription status, due date, fee, how to pay, payment history and receipts. Online card / mobile-money payment is planned (docs/payment-integration.md), not built.
+7. **In-app notifications** (order events, connection requests, team announcements).
 
 **Out of scope unless the user explicitly asks:**
 
-- Online payments, payment gateways, mobile-money integrations (payments are recorded, never taken). This includes subscriptions.
+- Online payments, payment gateways, mobile-money integrations (payments are recorded, never taken). Subscriptions included: the plan in docs/payment-integration.md is ready, but building it needs the user's go-ahead.
 - Email or SMS delivery (planned later behind the same `Notification`/`Announcement` records), third-party APIs, AI features.
 - Several logins or staff roles inside one business (the schema allows it later: `User.orgId`).
 - Public storefront, patient-facing app, delivery tracking maps.
@@ -88,9 +89,11 @@ app/
     pos/, sales/, patients/, prescriptions/, reports/   (retailers)
     audit/, settings/ (business details, bank, logo, terms), notifications/
     guide/                How Parallax works for this account type (components/guide/BusinessGuide)
-  (admin)/admin/          Parallax team: overview, businesses (+[id]), announcements, demo-requests, activity, guide
+    billing/              Subscription status, fee, how to pay, payment history + receipts (paying kinds, cap "billing")
+  (admin)/admin/          Parallax team: overview, businesses (+[id]), billing (+[orgId]), announcements, demo-requests, activity, guide
   documents/[id]/[kind]   inquiry | quotation | purchase-order | invoice | delivery-note (both parties only)
   documents/sales/[id]    Counter receipt
+  documents/subscription/[id]  Subscription receipt (the business that paid, or the team)
   api/
     auth/login (rate-limited), logout, signout (GET), register (PUBLIC sign-up)
     account/password
@@ -102,7 +105,7 @@ app/
     items, items/[id] (details or {offered})
     inventory/*, stock/receive, stock-take, stock-take/[id]/report, sales, patients, prescriptions(+dispense)
     lookup (GET), search (GET), notifications/read
-    admin/businesses (+[id], [id]/status, [id]/subscription), admin/users/[id], admin/announcements
+    admin/businesses (+[id], [id]/status), admin/billing/[orgId] (fee), admin/billing/[orgId]/payments (mark as paid), admin/users/[id], admin/announcements
     demo-requests (PUBLIC), demo-requests/[id]/contacted (team)
 components/
   SidebarLayout.tsx       Collapsible dark sidebar shared by Shell and AdminShell (icons fixed, labels fade)
@@ -124,6 +127,8 @@ lib/
   trade.ts                Statuses, side labels, tones, PAYMENT_TERMS, CATALOG_SELECT, balanceOf, plainStatus (client-safe)
   trade-server.ts         loadOrder(t, id) → {order, side}, actsAs(), viewFor(), addEvent(), dueDate(), linesTotal()
   subscription.ts         subscriptionState(), TRIAL_DAYS 30, GRACE_DAYS 14, READ_ONLY_MESSAGE
+  billing.ts              BILLING_METHODS, labels, team filters, ONLINE_PAYMENTS_ENABLED (client-safe)
+  billing-server.ts       billingWhere() (team filters), recordSubscriptionPayment() (the one write path: period + receipt no.)
   admin.ts, passwords.ts  pageAdmin()/apiAdmin(), temporaryPassword()
   notify.ts               notify(t, orgId, …) (createMany: no RETURNING under RLS)
   audit.ts                audit(t, …) (business log), platformAudit(…) (team log)
@@ -137,7 +142,8 @@ public/guide/             Guide screenshots (made by scripts/guide-shots.ts; do 
 
 ## Domain model
 
-- **Platform tables** (no tenant): `Organization` (the business: kind, name, town, listed, defaultPaymentTerms/creditDays, status ACTIVE|SUSPENDED|DELETED; encrypted licence, TPIN, bank fields), `User` (role = `ADMIN` or the org's kind, `orgId`, `mustChangePassword`, `sessionVersion`), `Subscription` + `SubscriptionPayment` (paying kinds only), `Announcement` + `AnnouncementRead`, `PlatformAudit`, `DemoRequest`.
+- **Platform tables** (no tenant): `Organization` (the business: kind, name, town, listed, defaultPaymentTerms/creditDays, status ACTIVE|SUSPENDED|DELETED; encrypted licence, TPIN, bank fields), `User` (role = `ADMIN` or the org's kind, `orgId`, `mustChangePassword`, `sessionVersion`), `Subscription` (periodEnd, trialEndsAt, monthlyFee; paying kinds only), `Announcement` + `AnnouncementRead`, `PlatformAudit`, `DemoRequest`.
+- **`SubscriptionPayment`** carries `orgId` (in `OWNED`): a business reads its own rows through `t.db` (RLS, SELECT only); only `parallax_admin` writes, through `recordSubscriptionPayment()`. Fields for online payments (`source`, `status`, `provider`, `providerRef`) are ready; only `status: "PAID"` rows count.
 - **Tenant tables** carry `orgId` (also on child rows): `Category`, `Product` (`offered` = shown to connected buyers; `@@unique([orgId, sku])`), `Batch`, `StockIntake`, `StockTake(+Item)`, `Patient` (encrypted contact/health fields; names plain for search), `Prescription(+Item)`, `Sale(+Item)`, `AuditLog`, `Contact` (private counterparties, encrypted details), `Notification`, `ProductLink` (supplier item → my item).
 - **Shared trade tables** (exactly two parties): `TradeLink` (seller, buyer, PENDING|ACTIVE|DECLINED|ENDED, terms override), `TradeOrder` (+ `TradeOrderItem`, `TradeOrderEvent`, `TradePayment`). One side may be a private `Contact` (channel `OFFLINE`); the creating business then takes both sides' steps (`actsAs()`).
 - Order flow: `INQUIRY → QUOTED → ORDERED → (PREPARING → READY) → DISPATCHED → RECEIVED → CLOSED`; `DECLINED` (seller), `CANCELLED` (buyer before ORDERED, seller before DISPATCHED); a quote past `validUntil` reads as `EXPIRED`. Changing a price after acceptance returns it to `QUOTED`; a price can't change once invoiced. `PREPAY` orders must be invoiced and paid in full before dispatch; others may dispatch first. **Stock leaves at dispatch** (seller with inventory; each line must be linked to a seller item). **Stock arrives through the delivery queue**: receiving creates `StockIntake` lines (pre-matched via `ProductLink`), and stock is added when a line is completed with batch and expiry. Orders close when received and paid in full.

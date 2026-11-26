@@ -52,7 +52,7 @@ Production sign-in cookies are HTTPS-only. Set `COOKIE_SECURE="false"` only to r
 | **Retailer** | Sign-up, or the Parallax team | Clients | Wholesalers | Inventory, sales counter, patients, prescriptions, orders, purchases |
 | **Client** | Sign-up, or the Parallax team | — | Wholesalers, retailers | Purchases. Free of charge. |
 
-Each business has one login. Businesses sign up at `/signup` (or "Create an account" on the landing page). Manufacturers, wholesalers and retailers start with a 30-day trial; the Parallax team records subscription payments by hand. Fourteen days after a subscription ends, the account becomes read-only until it is renewed.
+Each business has one login. Businesses sign up at `/signup` (or "Create an account" on the landing page). Manufacturers, wholesalers and retailers start with a 30-day trial. Their **Billing** page shows when they are due, how to pay, and every receipt. The Parallax team marks accounts as paid on its own **Billing** page, which issues a numbered receipt. Fourteen days after a subscription ends, the account becomes read-only until it is renewed. Paying online by card or mobile money is planned (docs/payment-integration.md).
 
 ## How trading works
 

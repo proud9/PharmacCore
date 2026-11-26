@@ -68,13 +68,21 @@ export function SidebarLayout({
     >
       <aside className="bg-pine-950 text-parchment lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
         <div className="flex items-center gap-3 border-b border-white/10 px-4 py-4 lg:py-5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white p-1">
-            <img src="/brand/parallax-logo-96.png" alt="" width={32} height={32} className="h-8 w-8" />
-          </div>
-          <div className={cn("min-w-0 flex-1", fade)}>
-            <p className="font-display text-lg font-semibold leading-none">Parallax</p>
-            <p className="mt-1 truncate text-[11px] uppercase tracking-[0.18em] text-sage-300">{subtitle}</p>
-          </div>
+          {/* The logo goes to the landing page (signed-in visitors see "Open Parallax" there). */}
+          <Link
+            href="/"
+            title={collapsed ? "Parallax home page" : undefined}
+            aria-label="Parallax home page"
+            className="group flex min-w-0 flex-1 items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-brass/60"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white p-1 transition group-hover:ring-2 group-hover:ring-white/30">
+              <img src="/brand/parallax-logo-96.png" alt="" width={32} height={32} className="h-8 w-8" />
+            </span>
+            <span className={cn("min-w-0 flex-1", fade)}>
+              <span className="block font-display text-lg font-semibold leading-none">Parallax</span>
+              <span className="mt-1 block truncate text-[11px] uppercase tracking-[0.18em] text-sage-300">{subtitle}</span>
+            </span>
+          </Link>
           <button
             type="button"
             className="rounded-lg p-2 text-sage-300 transition hover:bg-white/10 hover:text-white lg:hidden"

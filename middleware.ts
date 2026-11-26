@@ -64,7 +64,8 @@ export async function middleware(request: NextRequest) {
   const adminArea = pathname === "/admin" || pathname.startsWith("/admin/") || pathname.startsWith("/api/admin");
   const shared = pathname.startsWith("/account") || pathname.startsWith("/api/account") || pathname === "/api/auth/logout";
   if (role === "ADMIN") {
-    if (adminArea || shared || pathname.startsWith("/api/demo-requests")) return NextResponse.next();
+    // The team may also open subscription receipts (the page itself checks who is asking).
+    if (adminArea || shared || pathname.startsWith("/api/demo-requests") || pathname.startsWith("/documents/subscription/")) return NextResponse.next();
     if (pathname.startsWith("/api")) return NextResponse.json({ error: "Your account can't do that." }, { status: 403 });
     return redirect(request, "/admin");
   }

@@ -17,7 +17,8 @@ export function TeamGuide() {
           <MenuList
             items={[
               { name: "Overview", text: "Counts of businesses by type, subscriptions ending soon, due or read-only, open demo requests, newest sign-ups." },
-              { name: "Businesses", text: "Every business account. Create one, edit its details, manage its login and record subscription payments." },
+              { name: "Businesses", text: "Every business account. Create one, edit its details and manage its login." },
+              { name: "Billing", text: "Every paying account's subscription: who is due or overdue, mark accounts as paid, receipts, fees, and suspending." },
               { name: "Announcements", text: "Messages to everyone, to one account type, or to one business. They appear in each business's notifications." },
               { name: "Demo requests", text: "Requests sent from \"Request a demo\" on the website." },
               { name: "Team activity", text: "Every action the team takes, with who and when." },
@@ -40,7 +41,7 @@ export function TeamGuide() {
               items: [
                 "Business name, type, town, address, phone, email and website",
                 "The login's name and email, and whether it is switched on",
-                "Subscriptions and the payments you record",
+                "Subscriptions, fees, payments and receipts (in Billing)",
                 "Announcements, demo requests and the team's own activity",
               ],
             }}
@@ -114,9 +115,9 @@ export function TeamGuide() {
       ),
     },
     {
-      id: "subscriptions",
-      title: "Subscriptions",
-      lead: "Manufacturers, wholesalers and pharmacies pay. Clients never do.",
+      id: "billing",
+      title: "Billing",
+      lead: "Manufacturers, wholesalers and pharmacies pay. Clients never do. All account money lives on the Billing page.",
       body: (
         <>
           <FlowStrip
@@ -129,13 +130,33 @@ export function TeamGuide() {
               { icon: "refresh", title: "Renewed", text: "Record the payment and it works again at once. Nothing is lost.", tone: "good" },
             ]}
           />
+          <h3>Who is due and who is overdue</h3>
+          <p>
+            The cards at the top of <strong>Billing</strong> count accounts due within 14 days, accounts whose payment is due (ended, still working),
+            and overdue accounts (read-only). Click a card, or use <strong>Show</strong>, to list only those. The list is sorted most urgent first and
+            shows each account&apos;s paid-up date, fee per month and last payment.
+          </p>
+          <Shot src="team-billing" path="/admin/billing" caption="Billing: counts that need action, then every paying account, most urgent first, with Mark as paid and Suspend on each row." />
+          <h3>Mark an account as paid</h3>
           <Steps
             items={[
-              { title: "Receive the payment", text: "Parallax doesn't take payments; the business pays the company directly." },
-              { title: "Open the business", text: "Under Record a payment, enter the amount in Kwacha, the date paid, the months it covers and the bank or receipt reference." },
-              { title: "Record payment", text: "The subscription period moves on and the business's notice disappears." },
+              { title: "Receive the payment", text: "The business pays the company by bank transfer or mobile money. Parallax doesn't take payments itself yet." },
+              { title: "Click Mark as paid", text: "On the account's row, or on its own billing page. Enter the months covered (the amount fills in from the fee), the date paid, how it was paid and the reference." },
+              { title: "Save", text: "The paid-up period moves on, a read-only account works again at once, and a numbered receipt (RCT-year-number) is issued. The business sees it on its own Billing page." },
             ]}
           />
+          <Shot src="team-billing-account" path="/admin/billing/…" caption="One account: status, fee, total paid, every payment with its receipt, and the Mark as paid form." />
+          <h3>Suspend at once</h3>
+          <p>
+            <strong>Suspend</strong> on a row stops the login immediately and signs the business out everywhere, for example after repeated non-payment.{" "}
+            <strong>Reactivate</strong> undoes it. Suspending is separate from read-only, which happens by itself {GRACE_DAYS} days after a subscription ends,
+            and recording a payment does not reactivate a suspended account.
+          </p>
+          <h3>Payments received</h3>
+          <p>
+            The <strong>Payments received</strong> tab lists every payment across all accounts with its receipt. Search by business, receipt number or
+            reference, filter by method, and see the total. Payments made online will appear here by themselves once card and mobile-money payments are added.
+          </p>
         </>
       ),
     },

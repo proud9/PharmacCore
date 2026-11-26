@@ -9,6 +9,18 @@ export const CONTACT = {
   website: "www.example.com",
 };
 
+/**
+ * Where businesses pay their Parallax subscription, shown on the Billing page and on receipts.
+ * Placeholders until the real account is opened; a null field shows as "To be added".
+ */
+export const BILLING_DETAILS = {
+  bankName: null as string | null,
+  accountName: "Parallax",
+  accountNumber: null as string | null,
+  branch: null as string | null,
+  mobileMoney: null as string | null,
+};
+
 export const SOCIAL_LINKS: Record<"linkedin" | "facebook" | "instagram" | "x", string | null> = {
   linkedin: null,
   facebook: null,

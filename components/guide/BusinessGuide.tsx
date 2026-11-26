@@ -124,6 +124,7 @@ function overview(kind: OrgKind, f: { sells: boolean; buys: boolean; stock: bool
     menu.push({ name: "Reports", text: "Counter sales, margin and stock value for the last 30 days." });
   }
   menu.push({ name: "Activity log", text: "Every change made in your account: who, what and when." });
+  if (kind !== "CLIENT") menu.push({ name: "Billing", text: "Your Parallax subscription: when it is due, your fee, how to pay, and every receipt." });
   menu.push({ name: "Business details", text: "Your name, address, licence, TPIN, logo, bank details" + (f.sells ? " and default payment terms." : ".") });
   menu.push({ name: "Guide", text: "This page." });
 
@@ -648,7 +649,7 @@ function notifications(): GuideSection {
 function subscription(): GuideSection {
   return {
     id: "subscription",
-    title: "Your subscription",
+    title: "Billing and your subscription",
     lead: "Manufacturers, wholesalers and pharmacies pay a subscription. Clients use Parallax free.",
     body: (
       <>
@@ -662,7 +663,26 @@ function subscription(): GuideSection {
             { icon: "refresh", title: "Renewed", text: "As soon as the team records your payment, everything works again. Nothing is lost.", tone: "good" },
           ]}
         />
-        <p>Subscriptions are paid directly to the Parallax team; contact them to subscribe or renew. Your connections and orders carry on through every stage.</p>
+        <h3>The Billing page</h3>
+        <Steps
+          items={[
+            { title: "Open Billing", text: "It shows whether you are on trial, paid up, due or read-only, the date you are paid up to, your fee per month and your last payment." },
+            {
+              title: "Pay Parallax",
+              text: "By bank transfer or mobile money to the details under How to pay, with your business name as the reference.",
+            },
+            {
+              title: "Get your receipt",
+              text: "The Parallax team marks your account as paid. Your paid-up date moves on, a read-only account works again at once, and a numbered receipt appears in Payment history. Click Receipt to print it or save it as PDF.",
+            },
+          ]}
+        />
+        <Shot src="billing" path="/billing" caption="Billing: your status and due date at the top, every payment with its receipt, and how to pay." />
+        <Shot src="document-receipt" path="/documents/subscription/…" caption="A subscription receipt from Parallax: what was paid, for which period, and how." />
+        <Note title="Paying online">
+          Paying by card or mobile money straight from the Billing page is coming. Your receipt will then appear as soon as the payment goes through.
+        </Note>
+        <p>When a payment is due, a notice at the top of every page links to Billing. Your connections and orders carry on through every stage.</p>
       </>
     ),
   };
@@ -734,6 +754,10 @@ function questions(kind: OrgKind, f: { sells: boolean; buys: boolean; stock: boo
     { q: "Who can sign in to our account?", a: "One login per business. Keep the password safe. If you lose it, the Parallax team can give you a temporary one, which you change at first sign-in." },
     { q: "Can I use Parallax on my phone?", a: "Yes. It runs in any modern browser on a computer, tablet or phone. Nothing to install." },
   );
-  if (kind !== "CLIENT") items.push({ q: "What happens if we don't renew?", a: `${GRACE_DAYS} days of reminders, then read-only until you renew. Nothing is deleted.` });
+  if (kind !== "CLIENT")
+    items.push(
+      { q: "What happens if we don't renew?", a: `${GRACE_DAYS} days of reminders, then read-only until you renew. Nothing is deleted.` },
+      { q: "Where are our subscription receipts?", a: "On the Billing page, under Payment history. Each payment has a numbered receipt you can print or save as PDF." },
+    );
   return { id: "questions", title: "Quick answers", body: <Faq items={items} /> };
 }

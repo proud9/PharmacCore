@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { format, addMonths } from "date-fns";
 import { usePost } from "@/components/usePost";
 
 type Profile = { name: string; town: string; address: string; phone: string; email: string; website: string; listed: boolean };
@@ -142,48 +141,5 @@ export function LoginActions({ userId, active }: { userId: string; active: boole
       ) : null}
       {error ? <p className="text-sm text-rust">{error}</p> : null}
     </div>
-  );
-}
-
-export function SubscriptionForm({ orgId }: { orgId: string }) {
-  const { post, error, saving } = usePost();
-  const [months, setMonths] = useState(12);
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    await post(`/api/admin/businesses/${orgId}/subscription`, {
-      amount: Number(form.get("amount")),
-      paidOn: form.get("paidOn"),
-      months,
-      reference: form.get("reference"),
-    });
-  }
-
-  return (
-    <form onSubmit={onSubmit} className="mt-4 grid gap-3 sm:grid-cols-2">
-      <h3 className="font-semibold text-pine-900 sm:col-span-2">Record a payment</h3>
-      <div>
-        <label>Amount (ZMW)</label>
-        <input name="amount" type="number" min={0} step="0.01" required />
-      </div>
-      <div>
-        <label>Paid on</label>
-        <input name="paidOn" type="date" required defaultValue={format(new Date(), "yyyy-MM-dd")} />
-      </div>
-      <div>
-        <label>Months covered</label>
-        <input type="number" min={1} max={36} value={months} onChange={(event) => setMonths(Number(event.target.value) || 1)} />
-        <p className="mt-1 text-xs text-ink/60">Extends from the current end date (or today, if already ended): about {format(addMonths(new Date(), months), "MMM yyyy")}.</p>
-      </div>
-      <div>
-        <label>Reference</label>
-        <input name="reference" placeholder="Bank or receipt reference" />
-      </div>
-      {error ? <p className="text-sm text-rust sm:col-span-2">{error}</p> : null}
-      <button className="btn btn-primary w-fit" disabled={saving}>
-        {saving ? "Saving…" : "Record payment"}
-      </button>
-    </form>
   );
 }

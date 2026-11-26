@@ -84,3 +84,11 @@ DROP POLICY IF EXISTS party ON "TradeOrderEvent";
 CREATE POLICY party ON "TradeOrderEvent" USING (EXISTS (SELECT 1 FROM "TradeOrder" o WHERE o."id" = "orderId")) WITH CHECK (EXISTS (SELECT 1 FROM "TradeOrder" o WHERE o."id" = "orderId"));
 DROP POLICY IF EXISTS party ON "TradePayment";
 CREATE POLICY party ON "TradePayment" USING (EXISTS (SELECT 1 FROM "TradeOrder" o WHERE o."id" = "orderId")) WITH CHECK (EXISTS (SELECT 1 FROM "TradeOrder" o WHERE o."id" = "orderId"));
+
+-- Subscription payments: the team (parallax_admin) records them; a business may only read its own.
+ALTER TABLE "SubscriptionPayment" ENABLE ROW LEVEL SECURITY;
+REVOKE INSERT, UPDATE, DELETE ON "SubscriptionPayment" FROM parallax_app;
+DROP POLICY IF EXISTS tenant ON "SubscriptionPayment";
+CREATE POLICY tenant ON "SubscriptionPayment" FOR SELECT TO parallax_app USING ("orgId" = current_setting('app.org_id', true));
+DROP POLICY IF EXISTS team ON "SubscriptionPayment";
+CREATE POLICY team ON "SubscriptionPayment" TO parallax_admin USING (true) WITH CHECK (true);

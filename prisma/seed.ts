@@ -5,7 +5,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { addDays, subDays } from "date-fns";
+import { addDays, addMonths, subDays } from "date-fns";
 import { loadEnv } from "../scripts/db";
 import { withCrypto } from "../lib/db";
 
@@ -88,7 +88,14 @@ async function main() {
   }
 
   const zpi = await business({ kind: "MANUFACTURER", name: "Zambia Pharma Industries", town: "Lusaka", login: "zpi@parallax.local", person: "Mwila Banda" });
-  const apex = await business({ kind: "MANUFACTURER", name: "Apex Generics", town: "Ndola", login: "apex@parallax.local", person: "Tomás Silva" });
+  const apex = await business({
+    kind: "MANUFACTURER",
+    name: "Apex Generics",
+    town: "Ndola",
+    login: "apex@parallax.local",
+    person: "Tomás Silva",
+    periodEnd: subDays(new Date(), 40), // overdue: read-only
+  });
   const kilmers = await business({ kind: "WHOLESALER", name: "Kilmer's Medical Wholesale", town: "Lusaka", login: "kilmers@parallax.local", person: "Chanda Mulenga", terms: "CREDIT" });
   const copper = await business({
     kind: "WHOLESALER",
@@ -102,6 +109,46 @@ async function main() {
   const kabwe = await business({ kind: "RETAILER", name: "Kabwe Family Pharmacy", town: "Kabwe", login: "kabwe@parallax.local", person: "Ruth Zulu", trial: true, periodEnd: addDays(new Date(), 5), bank: false });
   const uth = await business({ kind: "CLIENT", name: "University Teaching Hospital", town: "Lusaka", login: "uth@parallax.local", person: "Dr Mutale Chola" });
   const hope = await business({ kind: "CLIENT", name: "Hope NGO Clinic", town: "Chongwe", login: "hope@parallax.local", person: "Sister Agnes Mwale" });
+
+  // ── Subscription billing: agreed fees and past payments with receipts ────────
+  let receipt = 0;
+  async function paid(org: { id: string; name: string }, fee: number, history: { monthsAgo: number; months: number; method: string; reference: string }[]) {
+    const sub = await db.subscription.update({ where: { orgId: org.id }, data: { monthlyFee: fee } });
+    for (const row of history) {
+      const paidOn = subDays(addMonths(new Date(), -row.monthsAgo), 2);
+      const periodStart = addMonths(new Date(), -row.monthsAgo);
+      receipt += 1;
+      await db.subscriptionPayment.create({
+        data: {
+          subscriptionId: sub.id,
+          orgId: org.id,
+          orgName: org.name,
+          receiptNo: `RCT-${paidOn.getFullYear()}-${String(receipt).padStart(5, "0")}`,
+          amount: fee * row.months,
+          paidOn,
+          months: row.months,
+          periodStart,
+          periodEnd: addMonths(periodStart, row.months),
+          method: row.method,
+          reference: row.reference,
+          recordedByName: "Parallax Team",
+        },
+      });
+    }
+  }
+  await paid(zpi.org, 1500, [{ monthsAgo: 2, months: 12, method: "BANK_TRANSFER", reference: "ZAN-88213" }]);
+  await paid(apex.org, 1500, [{ monthsAgo: 7, months: 6, method: "BANK_TRANSFER", reference: "FNB-30418" }]);
+  await paid(kilmers.org, 1200, [
+    { monthsAgo: 14, months: 6, method: "BANK_TRANSFER", reference: "ZAN-71102" },
+    { monthsAgo: 8, months: 6, method: "MOBILE_MONEY", reference: "MTN-5521984" },
+    { monthsAgo: 2, months: 12, method: "BANK_TRANSFER", reference: "ZAN-90077" },
+  ]);
+  await paid(copper.org, 1200, [{ monthsAgo: 3, months: 3, method: "MOBILE_MONEY", reference: "AIRTEL-77310" }]);
+  await paid(central.org, 600, [
+    { monthsAgo: 4, months: 1, method: "MOBILE_MONEY", reference: "MTN-4410022" },
+    { monthsAgo: 3, months: 12, method: "MOBILE_MONEY", reference: "MTN-4483310" },
+  ]);
+  await db.subscription.update({ where: { orgId: kabwe.org.id }, data: { monthlyFee: 600 } });
 
   // ── Items ──────────────────────────────────────────────────────────────────
   const CATALOG = [

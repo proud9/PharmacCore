@@ -20,7 +20,7 @@ export default function PrivacyPage() {
           <li><strong>Stock:</strong> items, batches, expiry dates, deliveries received and stock takes, for wholesalers and pharmacies.</li>
           <li><strong>Patient records</strong> kept by a pharmacy at its sales counter: names, date of birth, contact details, allergies, insurance, prescriptions and sales.</li>
           <li><strong>Notifications and activity logs:</strong> what happened to an order or connection, who signed in and who changed which records, and when. The Parallax team&apos;s own actions are logged too.</li>
-          <li><strong>Subscriptions:</strong> plan, dates and payments recorded by the Parallax team. Clients have none.</li>
+          <li><strong>Subscriptions:</strong> fee, dates, payments and receipts, recorded by the Parallax team. Clients have none.</li>
           <li><strong>Demo requests:</strong> the name, business and contact details you send us from the website.</li>
         </ul>
       </section>

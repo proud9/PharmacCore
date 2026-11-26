@@ -57,7 +57,7 @@ export default async function BusinessesPage({ searchParams }: { searchParams: P
 
   return (
     <div>
-      <PageHeader title="Businesses" description="Every business account on Parallax. Open one to edit its details, logins or subscription." />
+      <PageHeader title="Businesses" description="Every business account on Parallax. Open one to edit its details or login; subscriptions and payments are in Billing." />
       <CreateBusinessForm />
       <section className="mt-6 rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
         <div className="mb-4 flex flex-wrap gap-3">
@@ -98,9 +98,15 @@ export default async function BusinessesPage({ searchParams }: { searchParams: P
                     <td>{org.town ?? "—"}</td>
                     <td className="text-xs">{org.users[0]?.email ?? "—"}</td>
                     <td>
-                      <Badge tone={sub.state === "READ_ONLY" ? "bad" : sub.state === "GRACE" ? "warn" : "neutral"}>
-                        {SUBSCRIPTION_LABEL[sub.state]}
-                      </Badge>
+                      {sub.state === "FREE" ? (
+                        <Badge tone="neutral">{SUBSCRIPTION_LABEL[sub.state]}</Badge>
+                      ) : (
+                        <Link href={`/admin/billing/${org.id}`} title="Open billing">
+                          <Badge tone={sub.state === "READ_ONLY" ? "bad" : sub.state === "GRACE" ? "warn" : "neutral"}>
+                            {SUBSCRIPTION_LABEL[sub.state]}
+                          </Badge>
+                        </Link>
+                      )}
                     </td>
                     <td>{format(org.createdAt, "dd MMM yyyy")}</td>
                   </tr>

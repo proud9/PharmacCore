@@ -232,6 +232,11 @@ async function main() {
     await capture({ file: "prescriptions", who: centralMail, path: "/prescriptions" });
     await capture({ file: "reports", who: centralMail, path: "/reports" });
 
+    // Billing
+    const lastReceipt = await db.subscriptionPayment.findFirstOrThrow({ where: { orgId: kilmers.id }, orderBy: { paidOn: "desc" } });
+    await capture({ file: "billing", who: kilmersMail, path: "/billing" });
+    await capture({ file: "document-receipt", who: kilmersMail, path: `/documents/subscription/${lastReceipt.id}` });
+
     // Settings and notifications
     await capture({ file: "settings", who: kilmersMail, path: "/settings" });
     await capture({ file: "notifications", who: kilmersMail, path: "/notifications" });
@@ -240,6 +245,8 @@ async function main() {
     await capture({ file: "team-overview", who: teamMail, path: "/admin" });
     await capture({ file: "team-businesses", who: teamMail, path: "/admin/businesses" });
     await capture({ file: "team-business", who: teamMail, path: `/admin/businesses/${kilmers.id}` });
+    await capture({ file: "team-billing", who: teamMail, path: "/admin/billing" });
+    await capture({ file: "team-billing-account", who: teamMail, path: `/admin/billing/${kilmers.id}` });
     await capture({ file: "team-announcements", who: teamMail, path: "/admin/announcements" });
     await capture({ file: "team-demo-requests", who: teamMail, path: "/admin/demo-requests" });
     console.log(`Saved to ${path.relative(ROOT, OUT)}/`);

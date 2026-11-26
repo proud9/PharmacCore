@@ -79,6 +79,25 @@ async function main() {
   check("Admin role is refused on orders", adminOrders === "denied", adminOrders);
   check("Admin role can list businesses", (await adminDb().organization.count()) === 8);
 
+  // Subscription payments: a business reads only its own receipts and can never write one.
+  const kPayments = await k.db.subscriptionPayment.count();
+  check("Kilmer's sees its own 3 subscription payments", kPayments === 3, kPayments);
+  const kReceipt = await adminDb().subscriptionPayment.findFirstOrThrow({ where: { orgId: kilmers.id }, select: { id: true } });
+  const peek = await base.$transaction([
+    base.$executeRaw`SELECT set_config('app.org_id', ${copper.id}, true)`,
+    base.$queryRaw<{ id: string }[]>`SELECT id FROM "SubscriptionPayment" WHERE id = ${kReceipt.id}`,
+  ]);
+  check("RLS hides Kilmer's receipts from Copperbelt", peek[1].length === 0);
+  const fakePayment = await base
+    .$transaction([
+      base.$executeRaw`SELECT set_config('app.org_id', ${copper.id}, true)`,
+      base.$executeRaw`UPDATE "SubscriptionPayment" SET amount = 0 WHERE "orgId" = ${copper.id}`,
+    ])
+    .then(() => "changed")
+    .catch((e: Error) => (e.message.includes("permission denied") ? "denied" : e.message));
+  check("A business can't change its own payments", fakePayment === "denied", fakePayment);
+  check("The team can read every payment", (await adminDb().subscriptionPayment.count()) >= 8);
+
   // Encryption round trip
   const org = await db.organization.findUniqueOrThrow({ where: { id: kilmers.id } });
   check("Bank number decrypts for the app", !!org.accountNumber && !org.accountNumber.startsWith("enc:"));
