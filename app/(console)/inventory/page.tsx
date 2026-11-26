@@ -1,11 +1,10 @@
+import { pageTenant } from "@/lib/tenant";
 import Link from "next/link";
 import { Trash2 } from "lucide-react";
 import { format, isBefore } from "date-fns";
-import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { InventoryTable, type InventoryRow } from "@/components/inventory/InventoryTable";
 import { IntakeQueue, type IntakeRow } from "@/components/inventory/IntakeQueue";
-import { canAdjustStock, requireUser } from "@/lib/auth";
 import { expiryWindow } from "@/lib/inventory";
 import { purgeExpiredDeletions } from "@/lib/deletion";
 import { drugTypeOf } from "@/lib/stocksheet";
@@ -19,7 +18,9 @@ import type { Prisma } from "@prisma/client";
  * supplier delivery notes, "Add item", CSV import, and per-row edits.
  */
 export default async function InventoryPage({ searchParams }: { searchParams: Promise<ListParams> }) {
-  await purgeExpiredDeletions();
+  const t = await pageTenant("inventory");
+  const { db } = t;
+  await purgeExpiredDeletions(t);
   const params = await searchParams;
   const { page, take, skip, pageSize } = paging(params);
   const q = searchText(params);
@@ -30,17 +31,16 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
     ...(q
       ? {
           OR: [
-            { sku: { contains: q } },
-            { name: { contains: q } },
-            { categoryNo: { contains: q } },
-            { batches: { some: { lotNumber: { contains: q }, quantity: { gt: 0 } } } },
+            { sku: { contains: q, mode: "insensitive" } },
+            { name: { contains: q, mode: "insensitive" } },
+            { categoryNo: { contains: q, mode: "insensitive" } },
+            { batches: { some: { lotNumber: { contains: q, mode: "insensitive" }, quantity: { gt: 0 } } } },
           ],
         }
       : {}),
   };
   // One page of items; search and the type filter run in the database.
-  const [user, products, total, intakes, deletedCount] = await Promise.all([
-    requireUser(),
+  const [products, total, intakes, deletedCount] = await Promise.all([
     db.product.findMany({
       where,
       include: { batches: { where: { quantity: { gt: 0 } }, orderBy: { expiryDate: "asc" } } },
@@ -56,7 +56,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
     }),
     db.product.count({ where: { deletedAt: { not: null }, purgedAt: null } }),
   ]);
-  const canEdit = Boolean(user && canAdjustStock(user.role));
+  const canEdit = !t.readOnly;
   const today = new Date();
   const soon = expiryWindow();
 
@@ -91,14 +91,24 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
     receivedOn: format(intake.createdAt, "dd MMM yyyy"),
     quantity: intake.quantity,
     unitCost: intake.unitCost,
-    product: {
-      sku: intake.product.sku,
-      name: intake.product.name,
-      categoryNo: intake.product.categoryNo,
-      type: drugTypeOf(intake.product.controlled),
-      unit: intake.product.unit,
-      price: intake.product.sellingPrice,
-    },
+    // A matched item shows its current details; a new supplier item starts from its delivery line.
+    product: intake.product
+      ? {
+          sku: intake.product.sku,
+          name: intake.product.name,
+          categoryNo: intake.product.categoryNo,
+          type: drugTypeOf(intake.product.controlled),
+          unit: intake.product.unit,
+          price: intake.product.sellingPrice,
+        }
+      : {
+          sku: "",
+          name: [intake.itemName, intake.itemStrength].filter(Boolean).join(" "),
+          categoryNo: null,
+          type: drugTypeOf(false),
+          unit: intake.itemUnit ?? "pack",
+          price: 0,
+        },
   }));
 
   return (

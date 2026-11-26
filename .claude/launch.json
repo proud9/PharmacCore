@@ -2,20 +2,11 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "pharmacore-dev",
+      "name": "parallax-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "run",
         "dev"
-      ],
-      "port": 3000
-    },
-    {
-      "name": "parallax-setup-test",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": [
-        "-c",
-        "DATABASE_URL=file:./setup-test.db npm run dev"
       ],
       "port": 3000
     },
@@ -30,10 +21,11 @@
     },
     {
       "name": "parallax-test",
-      "runtimeExecutable": "sh",
+      "runtimeExecutable": "npx",
       "runtimeArgs": [
-        "-c",
-        "DATABASE_URL=file:./test-workflow.db COOKIE_SECURE=false npx next start -p 3200"
+        "tsx",
+        "scripts/serve-test.ts",
+        "workflow"
       ],
       "port": 3200
     }

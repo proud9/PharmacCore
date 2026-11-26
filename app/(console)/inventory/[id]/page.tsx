@@ -1,23 +1,23 @@
+import { pageTenant } from "@/lib/tenant";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
-import { db } from "@/lib/db";
-import { getPharmacy } from "@/lib/pharmacy";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { money, stockOf } from "@/lib/utils";
 import { ReceiveForm } from "@/components/forms/ReceiveForm";
-import { canAdjustStock, requireUser } from "@/lib/auth";
 import { expiryWindow } from "@/lib/inventory";
+import { OfferedToggle } from "@/components/inventory/CatalogItems";
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
+  const t = await pageTenant("inventory");
+  const { db } = t;
   const { id } = await params;
-  const user = await requireUser();
   const product = await db.product.findUnique({
     where: { id },
-    include: { batches: { orderBy: { expiryDate: "asc" } }, category: true, supplier: true },
+    include: { batches: { orderBy: { expiryDate: "asc" } }, category: true },
   });
   if (!product) notFound();
-  const pharmacy = await getPharmacy();
+  const pharmacy = t.org;
   const qty = stockOf(product.batches);
   const soon = expiryWindow();
 
@@ -33,6 +33,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         {product.controlled ? <Badge tone="bad">DDA</Badge> : <Badge>OTC</Badge>}
         {qty <= product.reorderLevel ? <Badge tone="warn">Needs reorder</Badge> : <Badge tone="good">In stock</Badge>}
         <Badge>{product.category?.name ?? "No category"}</Badge>
+        {t.readOnly ? null : <OfferedToggle id={product.id} offered={product.offered} />}
       </div>
       <div className="grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
         <section className="rounded-2xl border border-pine-900/10 bg-white p-5 shadow-panel">
@@ -48,8 +49,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               </p>
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-[0.14em] text-pine-700/70">Supplier</p>
-              <p>{product.supplier?.name ?? "—"}</p>
+              <p className="text-[11px] uppercase tracking-[0.14em] text-pine-700/70">Manufacturer</p>
+              <p>{product.manufacturer ?? "—"}</p>
             </div>
           </div>
           <table className="table-grid">
@@ -77,7 +78,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             </tbody>
           </table>
         </section>
-        {user && canAdjustStock(user.role) ? <ReceiveForm productId={product.id} /> : null}
+        {!t.readOnly ? <ReceiveForm productId={product.id} /> : null}
       </div>
     </div>
   );

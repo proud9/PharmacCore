@@ -1,27 +1,25 @@
+import { pageTenant } from "@/lib/tenant";
 import Link from "next/link";
 import { format } from "date-fns";
 import { ArrowLeft } from "lucide-react";
-import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { RestoreButton } from "@/components/inventory/RestoreButton";
-import { canAdjustStock, requireUser } from "@/lib/auth";
 import { daysLeft, purgeDateOf, purgeExpiredDeletions, RETENTION_DAYS } from "@/lib/deletion";
 import { drugTypeOf } from "@/lib/stocksheet";
 import { stockOf } from "@/lib/utils";
 
 /** Items deleted from Inventory, restorable until they are permanently deleted. */
 export default async function DeleteQueuePage() {
-  await purgeExpiredDeletions();
-  const [user, items] = await Promise.all([
-    requireUser(),
-    db.product.findMany({
-      where: { deletedAt: { not: null }, purgedAt: null },
-      include: { batches: true },
-      orderBy: { deletedAt: "asc" },
-    }),
-  ]);
-  const canRestore = Boolean(user && canAdjustStock(user.role));
+  const t = await pageTenant("catalog");
+  const { db } = t;
+  await purgeExpiredDeletions(t);
+  const items = await db.product.findMany({
+    where: { deletedAt: { not: null }, purgedAt: null },
+    include: { batches: true },
+    orderBy: { deletedAt: "asc" },
+  });
+  const canRestore = !t.readOnly;
 
   return (
     <div>

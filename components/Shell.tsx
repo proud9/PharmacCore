@@ -15,10 +15,10 @@ import {
   Truck,
   Users,
   BarChart3,
-  Stethoscope,
   ScrollText,
-  Warehouse,
   Building2,
+  Bell,
+  Search,
   PackagePlus,
   Inbox,
   Wallet,
@@ -29,64 +29,86 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { Capability } from "@/lib/capabilities";
+import { format } from "date-fns";
 import { HeaderSearch } from "@/components/search/HeaderSearch";
 
 const COLLAPSE_KEY = "pharmacore:sidebar-collapsed";
 
-type NavItem = { href: string; label: string; icon: typeof Boxes };
+type NavItem = { href: string; label: string; icon: typeof Boxes; cap?: Capability | Capability[]; notCap?: Capability };
 
 const HOME: NavItem = { href: "/dashboard", label: "Home", icon: LayoutDashboard };
-const ORDERS: NavItem = { href: "/wholesale", label: "Wholesale orders", icon: Warehouse };
-const PAYMENTS: NavItem = { href: "/wholesale/payments", label: "Payments", icon: Wallet };
-const BUYERS: NavItem = { href: "/wholesale/accounts", label: "Buyers", icon: Building2 };
-const POS: NavItem = { href: "/pos", label: "Sales counter", icon: ShoppingCart };
-const INVENTORY: NavItem = { href: "/inventory", label: "Inventory", icon: Boxes };
-const STOCK_TAKE: NavItem = { href: "/stock-take", label: "Stock take", icon: ClipboardCheck };
-const PATIENTS: NavItem = { href: "/patients", label: "Patients", icon: Users };
-const PRESCRIPTIONS: NavItem = { href: "/prescriptions", label: "Prescriptions", icon: FileText };
-const SALES: NavItem = { href: "/sales", label: "Sales", icon: Receipt };
-const PURCHASES: NavItem = { href: "/purchases", label: "Purchases", icon: Truck };
-const REPORTS: NavItem = { href: "/reports", label: "Reports", icon: BarChart3 };
-const MAKERS: NavItem = { href: "/purchases/manufacturers", label: "Manufacturers", icon: Factory };
-const STAFF: NavItem = { href: "/staff", label: "Staff", icon: Stethoscope };
+const ORDERS: NavItem = { href: "/orders", label: "Orders", icon: Inbox, cap: "sell" };
+const PURCHASES: NavItem = { href: "/purchases", label: "Purchases", icon: Truck, cap: "buy" };
+const PAYMENTS: NavItem = { href: "/payments", label: "Payments", icon: Wallet, cap: ["sell", "buy"] };
+const CUSTOMERS: NavItem = { href: "/customers", label: "Customers", icon: Building2, cap: "sell" };
+const SUPPLIERS: NavItem = { href: "/suppliers", label: "Suppliers", icon: Factory, cap: "buy" };
+const DIRECTORY: NavItem = { href: "/directory", label: "Find businesses", icon: Search };
+const ITEMS: NavItem = { href: "/items", label: "Items", icon: PackagePlus, cap: "catalog", notCap: "inventory" };
+const INVENTORY: NavItem = { href: "/inventory", label: "Inventory", icon: Boxes, cap: "inventory" };
+const STOCK_TAKE: NavItem = { href: "/stock-take", label: "Stock take", icon: ClipboardCheck, cap: "inventory" };
+const POS: NavItem = { href: "/pos", label: "Sales counter", icon: ShoppingCart, cap: "counter" };
+const SALES: NavItem = { href: "/sales", label: "Counter sales", icon: Receipt, cap: "counter" };
+const PATIENTS: NavItem = { href: "/patients", label: "Patients", icon: Users, cap: "counter" };
+const PRESCRIPTIONS: NavItem = { href: "/prescriptions", label: "Prescriptions", icon: FileText, cap: "counter" };
+const REPORTS: NavItem = { href: "/reports", label: "Reports", icon: BarChart3, cap: "counter" };
 const AUDIT: NavItem = { href: "/audit", label: "Activity log", icon: ScrollText };
-const COMPANY: NavItem = { href: "/settings", label: "Company details", icon: Settings };
-const DEMOS: NavItem = { href: "/demo-requests", label: "Demo requests", icon: Inbox };
+const COMPANY: NavItem = { href: "/settings", label: "Business details", icon: Settings };
 
-/** Sidebar per role. Page and API guards in lib/auth.ts are what actually enforce access. */
-const NAV: Record<string, NavItem[]> = {
-  ADMIN: [HOME, ORDERS, PAYMENTS, BUYERS, POS, INVENTORY, STOCK_TAKE, PATIENTS, PRESCRIPTIONS, SALES, PURCHASES, MAKERS, REPORTS, STAFF, AUDIT, COMPANY, DEMOS],
-  FINANCE: [PAYMENTS, ORDERS, HOME, SALES, PURCHASES, MAKERS, REPORTS, INVENTORY, AUDIT, COMPANY],
-  SALES: [ORDERS, HOME, BUYERS, POS, INVENTORY, STOCK_TAKE, PATIENTS, PRESCRIPTIONS, SALES, PURCHASES, MAKERS, AUDIT],
-  BUYER: [
-    { href: "/portal", label: "My orders", icon: Warehouse },
-    { href: "/portal/new", label: "New order", icon: PackagePlus },
-  ],
-  MANUFACTURER: [{ href: "/supplier", label: "Orders", icon: Truck }],
-};
+/** The sidebar, filtered by what this business can do. Page and API guards (lib/tenant.ts) enforce it. */
+const NAV: NavItem[] = [
+  HOME,
+  ORDERS,
+  PURCHASES,
+  PAYMENTS,
+  CUSTOMERS,
+  SUPPLIERS,
+  DIRECTORY,
+  ITEMS,
+  INVENTORY,
+  STOCK_TAKE,
+  POS,
+  SALES,
+  PATIENTS,
+  PRESCRIPTIONS,
+  REPORTS,
+  AUDIT,
+  COMPANY,
+];
 
-function navFor(role: string) {
-  return NAV[role] ?? [];
+function navFor(caps: Capability[]) {
+  return NAV.filter((item) => {
+    const needed = item.cap === undefined ? [] : Array.isArray(item.cap) ? item.cap : [item.cap];
+    if (needed.length && !needed.some((cap) => caps.includes(cap))) return false;
+    if (item.notCap && caps.includes(item.notCap)) return false;
+    return true;
+  });
 }
+
+type SubscriptionBanner = { state: string; daysLeft: number | null; readOnlyOn: string | null };
 
 export function Shell({
   children,
   name,
-  role,
-  roleCode,
-  pharmacy,
+  orgName,
+  kindLabel,
+  caps,
+  unread,
+  subscription,
 }: {
   children: React.ReactNode;
   name: string;
-  role: string;
-  roleCode: string;
-  pharmacy: string;
+  orgName: string;
+  kindLabel: string;
+  caps: Capability[];
+  unread: number;
+  subscription: SubscriptionBanner;
 }) {
   const pathname = usePathname();
-  const nav = navFor(roleCode);
-  // The longest matching link wins, so /wholesale/payments doesn't also light up /wholesale.
+  const nav = navFor(caps);
+  // The longest matching link wins.
   const activeHref = nav
-    .filter((item) => pathname === item.href || (item.href !== "/portal" && pathname.startsWith(`${item.href}/`)))
+    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
     .sort((x, y) => y.href.length - x.href.length)[0]?.href;
   // Desktop: collapsed to an icon rail (remembered per browser). Mobile: menu opens as a drawer.
   const [collapsed, setCollapsed] = useState(false);
@@ -142,7 +164,7 @@ export function Shell({
           </div>
           <div className={cn("min-w-0 flex-1", collapsed && "lg:hidden")}>
             <p className="font-display text-lg font-semibold leading-none">Parallax</p>
-            <p className="mt-1 truncate text-[11px] uppercase tracking-[0.18em] text-sage-300">{pharmacy}</p>
+            <p className="mt-1 truncate text-[11px] uppercase tracking-[0.18em] text-sage-300">{orgName}</p>
           </div>
           <button
             type="button"
@@ -200,29 +222,63 @@ export function Shell({
       <div className="min-w-0">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-pine-900/10 bg-white/70 px-6 py-4 backdrop-blur">
           <div className="min-w-[160px]">
-            <p className="text-xs text-pine-700/70">{roleCode === "BUYER" ? "Buyer portal" : "Staff"}</p>
+            <p className="text-xs text-pine-700/70">{kindLabel}</p>
             <p>
-              {name} · {role}
+              {name} · {orgName}
             </p>
           </div>
           <div className="min-w-[220px] flex-1">
-            <HeaderSearch
-              placeholder={
-                roleCode === "BUYER"
-                  ? "Search orders, wholesalers…"
-                  : roleCode === "FINANCE"
-                    ? "Search orders, invoices, products…"
-                    : "Search products, patients, orders…"
-              }
-            />
+            <HeaderSearch placeholder={caps.includes("counter") ? "Search items, patients, orders…" : "Search items, orders, documents…"} />
           </div>
+          <Link
+            href="/notifications"
+            className="relative rounded-xl p-2 text-pine-800 transition hover:bg-pine-900/5"
+            aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
+          >
+            <Bell className="h-5 w-5" />
+            {unread ? (
+              <span className="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-rust px-1 text-center text-[11px] font-semibold leading-[18px] text-white">
+                {unread > 99 ? "99+" : unread}
+              </span>
+            ) : null}
+          </Link>
           <button onClick={logout} className="btn btn-ghost">
             <LogOut className="h-4 w-4" />
             Sign out
           </button>
         </header>
+        <SubscriptionNotice subscription={subscription} />
         <main className="px-6 py-6">{children}</main>
       </div>
     </div>
   );
+}
+
+/** Trial, payment-due and read-only reminders. Clients (free) and paid-up accounts see nothing. */
+function SubscriptionNotice({ subscription }: { subscription: SubscriptionBanner }) {
+  const { state, daysLeft, readOnlyOn } = subscription;
+  if (state === "READ_ONLY") {
+    return (
+      <div role="status" className="border-b border-rust/20 bg-rust/10 px-6 py-3 text-sm text-rust">
+        Your Parallax subscription has lapsed, so this account is read-only: you can view and download, but not create or
+        change anything. Contact the Parallax team to renew.
+      </div>
+    );
+  }
+  if (state === "GRACE") {
+    return (
+      <div role="status" className="border-b border-brass/30 bg-brass/10 px-6 py-3 text-sm text-pine-900">
+        Your Parallax subscription payment is due. The account becomes read-only
+        {readOnlyOn ? ` on ${format(new Date(readOnlyOn), "dd MMM yyyy")}` : " soon"}. Contact the Parallax team to renew.
+      </div>
+    );
+  }
+  if (state === "TRIAL" && daysLeft !== null && daysLeft <= 7) {
+    return (
+      <div role="status" className="border-b border-pine-900/10 bg-sage-100 px-6 py-2 text-sm text-pine-800">
+        Your free trial ends in {daysLeft} {daysLeft === 1 ? "day" : "days"}. Contact the Parallax team to subscribe.
+      </div>
+    );
+  }
+  return null;
 }

@@ -24,20 +24,4 @@ export function stockOf(batches: { quantity: number }[]) {
   return batches.reduce((sum, batch) => sum + batch.quantity, 0);
 }
 
-export const ROLES = ["ADMIN", "FINANCE", "SALES", "BUYER", "MANUFACTURER"] as const;
-export type Role = (typeof ROLES)[number];
-
-export const ROLE_LABEL: Record<string, string> = {
-  ADMIN: "Administrator",
-  FINANCE: "Finance",
-  SALES: "Sales",
-  BUYER: "Client account",
-  MANUFACTURER: "Manufacturer",
-};
-
-export const STAFF_ROLES = ["ADMIN", "FINANCE", "SALES"] as const;
-
-/** Roles removed in the wholesale role change; scripts/migrate-roles.ts moves their users to SALES. */
-export const LEGACY_ROLES = ["WHOLESALE_ADMIN", "PHARMACIST", "TECHNICIAN", "CASHIER", "INVENTORY"] as const;
-
-export { homePath } from "./paths";
+export { ROLES, ROLE_LABEL, homePath, type Role } from "./capabilities";

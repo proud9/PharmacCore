@@ -1,21 +1,19 @@
+import { pageTenant } from "@/lib/tenant";
 import { format } from "date-fns";
 import { notFound } from "next/navigation";
 import { DocumentFrame } from "@/components/documents/DocumentFrame";
 import { InvoiceSheet } from "@/components/documents/InvoiceSheet";
-import { isStaff, requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { getPharmacy } from "@/lib/pharmacy";
 
 export default async function SaleInvoicePage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
-  if (!user || !isStaff(user.role)) notFound();
+  const t = await pageTenant("counter");
+  const { db } = t;
   const { id } = await params;
   const [sale, pharmacy] = await Promise.all([
     db.sale.findUnique({
       where: { id },
-      include: { cashier: true, patient: true, items: { include: { product: true } } },
+      include: { patient: true, items: { include: { product: true } } },
     }),
-    getPharmacy(),
+    Promise.resolve(t.org),
   ]);
   if (!sale || !pharmacy) notFound();
 
@@ -30,7 +28,7 @@ export default async function SaleInvoicePage({ params }: { params: Promise<{ id
         issued={format(sale.createdAt, "dd MMM yyyy")}
         due={format(sale.createdAt, "dd MMM yyyy")}
         customerId={patient ? patient.id.slice(-8).toUpperCase() : "WALK-IN"}
-        preparedBy={sale.cashier.name}
+        preparedBy={sale.cashierName}
         billTo={{
           name: patient ? `${patient.firstName} ${patient.lastName}` : "Walk-in",
           company: patient?.insurance,

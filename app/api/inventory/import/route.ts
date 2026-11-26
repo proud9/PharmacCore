@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { canAdjustStock, requireUser } from "@/lib/auth";
+import { apiTenant } from "@/lib/tenant";
 import { saveItems } from "@/lib/items";
 import { csvToLines, tableToLines } from "@/lib/stocksheet";
 import { readItemsWorkbook } from "@/lib/xlsx";
@@ -8,10 +8,9 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 /** Imports items from an uploaded Excel template (.xlsx) or CSV file. */
 export async function POST(request: Request) {
-  const user = await requireUser();
-  if (!user || !canAdjustStock(user.role)) {
-    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
-  }
+  const auth = await apiTenant("catalog");
+  if (!auth.ok) return auth.response;
+  const { t } = auth;
   const form = await request.formData().catch(() => null);
   const file = form?.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -39,5 +38,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Import up to 2,000 items at a time." }, { status: 400 });
   }
 
-  return NextResponse.json(await saveItems(parsed.lines, user.id));
+  return NextResponse.json(await saveItems(t, parsed.lines));
 }

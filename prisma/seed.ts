@@ -1,752 +1,379 @@
+/**
+ * Demo data: a small trading network with every account type.
+ * Runs as the database owner (DIRECT_URL), so row-level security doesn't apply here.
+ * Every login's password is DEMO_PASSWORD; the logins are listed in README.md.
+ */
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { addDays, subDays } from "date-fns";
+import { loadEnv } from "../scripts/db";
+import { withCrypto } from "../lib/db";
 
-const db = new PrismaClient();
+loadEnv();
+const raw = new PrismaClient({ datasourceUrl: process.env.DIRECT_URL });
+const db = withCrypto(raw);
+
+export const DEMO_PASSWORD = "Parallax2026!";
+
+type Kind = "MANUFACTURER" | "WHOLESALER" | "RETAILER" | "CLIENT";
+
+let counter = 0;
+function no(prefix: string) {
+  counter += 1;
+  return `${prefix}-${String(1000 + counter)}`;
+}
 
 async function main() {
-  await db.consignmentEvent.deleteMany();
-  await db.consignmentItem.deleteMany();
-  await db.consignment.deleteMany();
-  await db.institution.deleteMany();
-  await db.saleItem.deleteMany();
-  await db.sale.deleteMany();
-  await db.stockTakeItem.deleteMany();
-  await db.stockTake.deleteMany();
-  await db.prescriptionItem.deleteMany();
-  await db.prescription.deleteMany();
-  await db.purchaseOrderEvent.deleteMany();
-  await db.purchaseOrderItem.deleteMany();
-  await db.purchaseOrder.deleteMany();
-  await db.batch.deleteMany();
-  await db.product.deleteMany();
-  await db.category.deleteMany();
-  await db.supplier.deleteMany();
-  await db.patient.deleteMany();
-  await db.auditLog.deleteMany();
-  await db.user.deleteMany();
-  await db.pharmacy.deleteMany();
-
-  const password = (plain: string) => bcrypt.hash(plain, 10);
-
-  // Wholesale staff: ADMIN (owner, everything), FINANCE (prices, invoices, payments), SALES (stock, sales, buyers, orders).
-  const [admin, finance, sales] = await Promise.all([
-    db.user.create({
-      data: {
-        email: "admin@pharmacore.local",
-        name: "Amara Okonkwo",
-        passwordHash: await password("Admin123!"),
-        role: "ADMIN",
-      },
-    }),
-    db.user.create({
-      data: {
-        email: "finance@pharmacore.local",
-        name: "Chanda Mulenga",
-        passwordHash: await password("Finance123!"),
-        role: "FINANCE",
-      },
-    }),
-    db.user.create({
-      data: {
-        email: "sales@pharmacore.local",
-        name: "Noah Patel",
-        passwordHash: await password("Sales123!"),
-        role: "SALES",
-      },
-    }),
-  ]);
-
-  await db.pharmacy.create({
-    data: {
-      id: "main",
-      name: "Pharmacy",
-      license: "ZAMRA-PH-8821",
-      phone: "+260 211 555 148",
-      email: "hello@lusakacentral.pharmacy",
-      address: "Cairo Road, Lusaka",
-      website: "lusakacentral.pharmacy",
-      tpin: "1001234567",
-      currency: "ZMW",
-      bankName: "Zanaco",
-      accountName: "Pharmacy",
-      accountNumber: "0123456789012",
-      bankBranch: "Lusaka Main",
-      swiftCode: "ZNCOZMLU",
-    },
-  });
-
-  const [antibiotics, analgesics, cardio, endocrine, otc, devices] = await Promise.all(
-    ["Antibiotics", "Analgesics", "Cardiovascular", "Endocrine", "OTC & wellness", "Devices"].map(
-      (name) => db.category.create({ data: { name } }),
-    ),
+  const tables = await raw.$queryRawUnsafe<{ tablename: string }[]>(
+    `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT LIKE '_prisma%'`,
   );
+  if (tables.length) {
+    await raw.$executeRawUnsafe(`TRUNCATE ${tables.map((t) => `"${t.tablename}"`).join(", ")} CASCADE`);
+  }
+  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
 
-  const [medline, apex, greenleaf] = await Promise.all([
-    db.supplier.create({
-      data: {
-        name: "MedLine Wholesale",
-        contact: "Priya Shah",
-        phone: "+1 (800) 555-2201",
-        email: "orders@medline.example",
-        address: "400 Supply Park, Newark",
-      },
-    }),
-    db.supplier.create({
-      data: {
-        name: "Apex Generics",
-        contact: "Tomás Silva",
-        phone: "+1 (800) 555-4410",
-        email: "desk@apexgenerics.example",
-        address: "77 Industry Blvd, Austin",
-      },
-    }),
-    db.supplier.create({
-      data: {
-        name: "Greenleaf Distributors",
-        contact: "Hannah Cho",
-        phone: "+1 (800) 555-9088",
-        email: "hello@greenleaf.example",
-        address: "12 Dock Road, Seattle",
-      },
-    }),
-  ]);
+  // The Parallax team
+  await db.user.create({ data: { email: "team@parallax.local", name: "Parallax Team", passwordHash, role: "ADMIN" } });
 
-  const catalog = [
-    {
-      sku: "AMX-500-21",
-      barcode: "890123400001",
-      name: "Amoxicillin 500 mg capsules",
-      genericName: "Amoxicillin",
-      form: "capsule",
-      strength: "500 mg",
-      manufacturer: "Apex",
-      categoryId: antibiotics.id,
-      supplierId: apex.id,
-      sellingPrice: 18.4,
-      costPrice: 7.2,
-      reorderLevel: 40,
-      requiresRx: true,
-      qty: 86,
-      expiryDays: 220,
-    },
-    {
-      sku: "AZI-250-06",
-      barcode: "890123400002",
-      name: "Azithromycin 250 mg tablets",
-      genericName: "Azithromycin",
-      form: "tablet",
-      strength: "250 mg",
-      manufacturer: "MedLine",
-      categoryId: antibiotics.id,
-      supplierId: medline.id,
-      sellingPrice: 22.0,
-      costPrice: 9.5,
-      reorderLevel: 30,
-      requiresRx: true,
-      qty: 18,
-      expiryDays: 40,
-    },
-    {
-      sku: "IBU-400-24",
-      barcode: "890123400003",
-      name: "Ibuprofen 400 mg tablets",
-      genericName: "Ibuprofen",
-      form: "tablet",
-      strength: "400 mg",
-      manufacturer: "Greenleaf",
-      categoryId: analgesics.id,
-      supplierId: greenleaf.id,
-      sellingPrice: 6.5,
-      costPrice: 2.1,
-      reorderLevel: 80,
-      requiresRx: false,
-      qty: 210,
-      expiryDays: 400,
-    },
-    {
-      sku: "PCM-500-16",
-      barcode: "890123400004",
-      name: "Paracetamol 500 mg tablets",
-      genericName: "Paracetamol",
-      form: "tablet",
-      strength: "500 mg",
-      manufacturer: "Greenleaf",
-      categoryId: analgesics.id,
-      supplierId: greenleaf.id,
-      sellingPrice: 4.2,
-      costPrice: 1.1,
-      reorderLevel: 120,
-      requiresRx: false,
-      qty: 64,
-      expiryDays: 28,
-    },
-    {
-      sku: "AML-5-30",
-      barcode: "890123400005",
-      name: "Amlodipine 5 mg tablets",
-      genericName: "Amlodipine",
-      form: "tablet",
-      strength: "5 mg",
-      manufacturer: "Apex",
-      categoryId: cardio.id,
-      supplierId: apex.id,
-      sellingPrice: 12.8,
-      costPrice: 4.4,
-      reorderLevel: 50,
-      requiresRx: true,
-      qty: 140,
-      expiryDays: 310,
-    },
-    {
-      sku: "LIS-10-28",
-      barcode: "890123400006",
-      name: "Lisinopril 10 mg tablets",
-      genericName: "Lisinopril",
-      form: "tablet",
-      strength: "10 mg",
-      manufacturer: "MedLine",
-      categoryId: cardio.id,
-      supplierId: medline.id,
-      sellingPrice: 14.5,
-      costPrice: 5.0,
-      reorderLevel: 40,
-      requiresRx: true,
-      qty: 12,
-      expiryDays: 180,
-    },
-    {
-      sku: "MET-500-56",
-      barcode: "890123400007",
-      name: "Metformin 500 mg tablets",
-      genericName: "Metformin",
-      form: "tablet",
-      strength: "500 mg",
-      manufacturer: "Apex",
-      categoryId: endocrine.id,
-      supplierId: apex.id,
-      sellingPrice: 9.9,
-      costPrice: 3.2,
-      reorderLevel: 70,
-      requiresRx: true,
-      qty: 190,
-      expiryDays: 260,
-    },
-    {
-      sku: "INS-NPH-10",
-      barcode: "890123400008",
-      name: "Insulin NPH 100 IU/ml 10 ml",
-      genericName: "Insulin isophane",
-      form: "vial",
-      strength: "100 IU/ml",
-      manufacturer: "MedLine",
-      categoryId: endocrine.id,
-      supplierId: medline.id,
-      sellingPrice: 38.0,
-      costPrice: 21.0,
-      reorderLevel: 15,
-      requiresRx: true,
-      controlled: false,
-      qty: 9,
-      expiryDays: 70,
-    },
-    {
-      sku: "VIT-D3-60",
-      barcode: "890123400009",
-      name: "Vitamin D3 1000 IU capsules",
-      genericName: "Cholecalciferol",
-      form: "capsule",
-      strength: "1000 IU",
-      manufacturer: "Greenleaf",
-      categoryId: otc.id,
-      supplierId: greenleaf.id,
-      sellingPrice: 11.2,
-      costPrice: 4.0,
-      reorderLevel: 40,
-      requiresRx: false,
-      qty: 75,
-      expiryDays: 500,
-    },
-    {
-      sku: "GLU-STR-50",
-      barcode: "890123400010",
-      name: "Glucose test strips (50)",
-      genericName: "Glucose oxidase strips",
-      form: "device",
-      strength: "50 count",
-      manufacturer: "MedLine",
-      categoryId: devices.id,
-      supplierId: medline.id,
-      sellingPrice: 27.5,
-      costPrice: 14.0,
-      reorderLevel: 25,
-      requiresRx: false,
-      qty: 33,
-      expiryDays: 150,
-      kind: "EQUIPMENT",
-    },
-    {
-      sku: "BP-DIG-01",
-      barcode: "890123400011",
-      name: "Digital blood pressure monitor",
-      genericName: "Sphygmomanometer",
-      form: "device",
-      strength: "unit",
-      manufacturer: "MedLine",
-      categoryId: devices.id,
-      supplierId: medline.id,
-      sellingPrice: 890,
-      costPrice: 420,
-      reorderLevel: 8,
-      requiresRx: false,
-      qty: 14,
-      expiryDays: 900,
-      kind: "EQUIPMENT",
-    },
-    {
-      sku: "OXM-FNG-01",
-      barcode: "890123400012",
-      name: "Finger pulse oximeter",
-      genericName: "Pulse oximeter",
-      form: "device",
-      strength: "unit",
-      manufacturer: "Greenleaf",
-      categoryId: devices.id,
-      supplierId: greenleaf.id,
-      sellingPrice: 320,
-      costPrice: 140,
-      reorderLevel: 12,
-      requiresRx: false,
-      qty: 22,
-      expiryDays: 900,
-      kind: "EQUIPMENT",
-    },
-    {
-      sku: "GLV-NTR-100",
-      barcode: "890123400013",
-      name: "Nitrile examination gloves (100)",
-      genericName: "Examination gloves",
-      form: "box",
-      strength: "100 count",
-      manufacturer: "Apex",
-      categoryId: devices.id,
-      supplierId: apex.id,
-      sellingPrice: 95,
-      costPrice: 40,
-      reorderLevel: 40,
-      requiresRx: false,
-      qty: 80,
-      expiryDays: 700,
-      kind: "EQUIPMENT",
-    },
-  ];
-
-  const products = [];
-  for (const item of catalog) {
-    const product = await db.product.create({
+  async function business(input: {
+    kind: Kind;
+    name: string;
+    town: string;
+    login: string;
+    person: string;
+    periodEnd?: Date | null;
+    trial?: boolean;
+    bank?: boolean;
+    listed?: boolean;
+    terms?: string;
+  }) {
+    const org = await db.organization.create({
       data: {
-        sku: item.sku,
-        barcode: item.barcode,
-        name: item.name,
-        genericName: item.genericName,
-        form: item.form,
-        strength: item.strength,
-        manufacturer: item.manufacturer,
-        categoryId: item.categoryId,
-        supplierId: item.supplierId,
-        sellingPrice: item.sellingPrice,
-        costPrice: item.costPrice,
-        reorderLevel: item.reorderLevel,
-        requiresRx: item.requiresRx,
-        controlled: "controlled" in item ? Boolean(item.controlled) : false,
-        kind: "kind" in item && item.kind ? item.kind : "MEDICINE",
-        wholesalePrice: item.sellingPrice,
+        kind: input.kind,
+        name: input.name,
+        town: input.town,
+        address: `Plot ${10 + counter}, ${input.town}`,
+        phone: "+260 211 555 100",
+        email: input.login,
+        listed: input.listed ?? input.kind !== "CLIENT",
+        defaultPaymentTerms: input.terms ?? "ON_DELIVERY",
+        licenceNo: input.kind === "CLIENT" ? null : `ZAMRA-${input.kind.slice(0, 2)}-${4000 + counter}`,
+        tpin: `100${2000000 + counter}`,
+        ...(input.bank === false
+          ? {}
+          : {
+              bankName: "Zanaco",
+              accountName: input.name,
+              accountNumber: `01234567${8000 + counter}`,
+              bankBranch: input.town,
+              swiftCode: "ZNCOZMLU",
+            }),
       },
     });
-    await db.batch.create({
-      data: {
-        productId: product.id,
-        lotNumber: `LOT-${item.sku.slice(0, 3)}-${Math.floor(Math.random() * 900 + 100)}`,
-        expiryDate: addDays(new Date(), item.expiryDays),
-        quantity: item.qty,
-      },
+    if (input.kind !== "CLIENT") {
+      const end = input.periodEnd ?? addDays(new Date(), 300);
+      await db.subscription.create({
+        data: {
+          orgId: org.id,
+          plan: input.trial ? "TRIAL" : "STANDARD",
+          trialEndsAt: input.trial ? end : null,
+          periodEnd: end,
+        },
+      });
+    }
+    const user = await db.user.create({
+      data: { email: input.login, name: input.person, passwordHash, role: input.kind, orgId: org.id },
     });
-    products.push(product);
+    return { org, user };
   }
 
-  const patients = await Promise.all([
-    db.patient.create({
-      data: {
-        firstName: "Helen",
-        lastName: "Park",
-        dateOfBirth: new Date("1968-03-12"),
-        gender: "F",
-        phone: "+1 415 555 0199",
-        allergies: "Penicillin",
-        insurance: "BlueShield Gold",
-        address: "9 Cedar Court",
-      },
-    }),
-    db.patient.create({
-      data: {
-        firstName: "Marcus",
-        lastName: "Adeyemi",
-        dateOfBirth: new Date("1981-11-02"),
-        gender: "M",
-        phone: "+1 415 555 0172",
-        insurance: "Aetna Care",
-        address: "44 Riverside Ave",
-      },
-    }),
-    db.patient.create({
-      data: {
-        firstName: "Ines",
-        lastName: "Costa",
-        dateOfBirth: new Date("1994-07-21"),
-        gender: "F",
-        phone: "+1 415 555 0133",
-        allergies: "NSAIDs",
-        address: "2 Mill Street",
-      },
-    }),
-  ]);
-
-  await db.prescription.create({
-    data: {
-      rxNumber: "RX-100284",
-      patientId: patients[0].id,
-      pharmacistId: sales.id,
-      prescriber: "Dr. Camille Ng",
-      clinic: "Harbor Family Clinic",
-      status: "PENDING",
-      items: {
-        create: [
-          {
-            productId: products[4].id,
-            quantity: 28,
-            dosage: "5 mg",
-            instructions: "One tablet daily in the morning",
-          },
-          {
-            productId: products[6].id,
-            quantity: 56,
-            dosage: "500 mg",
-            instructions: "One tablet twice daily with meals",
-          },
-        ],
-      },
-    },
+  const zpi = await business({ kind: "MANUFACTURER", name: "Zambia Pharma Industries", town: "Lusaka", login: "zpi@parallax.local", person: "Mwila Banda" });
+  const apex = await business({ kind: "MANUFACTURER", name: "Apex Generics", town: "Ndola", login: "apex@parallax.local", person: "Tomás Silva" });
+  const kilmers = await business({ kind: "WHOLESALER", name: "Kilmer's Medical Wholesale", town: "Lusaka", login: "kilmers@parallax.local", person: "Chanda Mulenga", terms: "CREDIT" });
+  const copper = await business({
+    kind: "WHOLESALER",
+    name: "Copperbelt Medical Supplies",
+    town: "Kitwe",
+    login: "copperbelt@parallax.local",
+    person: "Grace Phiri",
+    periodEnd: subDays(new Date(), 5), // payment due: in the grace period
   });
+  const central = await business({ kind: "RETAILER", name: "Lusaka Central Pharmacy", town: "Lusaka", login: "central@parallax.local", person: "Noah Tembo" });
+  const kabwe = await business({ kind: "RETAILER", name: "Kabwe Family Pharmacy", town: "Kabwe", login: "kabwe@parallax.local", person: "Ruth Zulu", trial: true, periodEnd: addDays(new Date(), 5), bank: false });
+  const uth = await business({ kind: "CLIENT", name: "University Teaching Hospital", town: "Lusaka", login: "uth@parallax.local", person: "Dr Mutale Chola" });
+  const hope = await business({ kind: "CLIENT", name: "Hope NGO Clinic", town: "Chongwe", login: "hope@parallax.local", person: "Sister Agnes Mwale" });
 
-  const amlodipine = products[4];
-  const ibuprofen = products[2];
-  const vitamin = products[8];
+  // ── Items ──────────────────────────────────────────────────────────────────
+  const CATALOG = [
+    { sku: "AMX-500", name: "Amoxicillin 500 mg capsules", generic: "Amoxicillin", form: "capsule", strength: "500 mg", unit: "box of 100", price: 184, cost: 72, rx: true },
+    { sku: "AZI-250", name: "Azithromycin 250 mg tablets", generic: "Azithromycin", form: "tablet", strength: "250 mg", unit: "box of 6", price: 220, cost: 95, rx: true },
+    { sku: "IBU-400", name: "Ibuprofen 400 mg tablets", generic: "Ibuprofen", form: "tablet", strength: "400 mg", unit: "box of 100", price: 65, cost: 21, rx: false },
+    { sku: "PCM-500", name: "Paracetamol 500 mg tablets", generic: "Paracetamol", form: "tablet", strength: "500 mg", unit: "box of 100", price: 42, cost: 11, rx: false },
+    { sku: "AML-5", name: "Amlodipine 5 mg tablets", generic: "Amlodipine", form: "tablet", strength: "5 mg", unit: "box of 30", price: 128, cost: 44, rx: true },
+    { sku: "MET-500", name: "Metformin 500 mg tablets", generic: "Metformin", form: "tablet", strength: "500 mg", unit: "box of 60", price: 96, cost: 31, rx: true },
+    { sku: "ORS-1", name: "Oral rehydration salts", generic: "ORS", form: "sachet", strength: "20.5 g", unit: "box of 50", price: 75, cost: 25, rx: false },
+    { sku: "GLV-M", name: "Examination gloves, medium", generic: null, form: "pair", strength: null, unit: "box of 100", price: 110, cost: 48, rx: false },
+  ];
 
-  const saleDays = [1, 2, 3, 5, 6, 8, 9, 11, 12, 14];
-  for (const offset of saleDays) {
-    const qty = offset % 3 === 0 ? 2 : 1;
-    const total = amlodipine.sellingPrice * qty + ibuprofen.sellingPrice;
-    await db.sale.create({
-      data: {
-        invoiceNo: `INV-${1000 + offset}`,
-        cashierId: sales.id,
-        patientId: offset % 2 === 0 ? patients[1].id : null,
-        subtotal: total,
-        tax: 0,
-        discount: 0,
-        total,
-        payment: offset % 2 === 0 ? "CARD" : "CASH",
-        createdAt: subDays(new Date(), offset),
-        items: {
-          create: [
-            {
-              productId: amlodipine.id,
-              quantity: qty,
-              unitPrice: amlodipine.sellingPrice,
-              total: amlodipine.sellingPrice * qty,
-            },
-            {
-              productId: ibuprofen.id,
-              quantity: 1,
-              unitPrice: ibuprofen.sellingPrice,
-              total: ibuprofen.sellingPrice,
-            },
-          ],
+  async function items(orgId: string, picks: number[], options: { stock?: boolean; markup?: number; maker?: string } = {}) {
+    const created = [];
+    for (const index of picks) {
+      const item = CATALOG[index];
+      const markup = options.markup ?? 1;
+      const product = await db.product.create({
+        data: {
+          orgId,
+          sku: item.sku,
+          name: item.name,
+          genericName: item.generic,
+          form: item.form,
+          strength: item.strength,
+          unit: item.unit,
+          manufacturer: options.maker ?? null,
+          sellingPrice: Math.round(item.price * markup),
+          costPrice: Math.round(item.cost * markup),
+          requiresRx: item.rx,
+          kind: item.sku === "GLV-M" ? "EQUIPMENT" : "MEDICINE",
+          reorderLevel: 20,
         },
+      });
+      if (options.stock) {
+        await db.batch.create({
+          data: { orgId, productId: product.id, lotNumber: `L${2400 + index}`, expiryDate: addDays(new Date(), 60 + index * 45), quantity: 40 + index * 15 },
+        });
+        if (index % 3 === 0) {
+          await db.batch.create({
+            data: { orgId, productId: product.id, lotNumber: `L${2500 + index}`, expiryDate: addDays(new Date(), 400), quantity: 60 },
+          });
+        }
+      }
+      created.push(product);
+    }
+    return created;
+  }
+
+  const zpiItems = await items(zpi.org.id, [0, 1, 3, 4, 5], { markup: 0.5, maker: "Zambia Pharma Industries" });
+  await items(apex.org.id, [2, 6, 7], { markup: 0.55, maker: "Apex Generics" });
+  const kilmersItems = await items(kilmers.org.id, [0, 1, 2, 3, 4, 5, 6, 7], { stock: true, markup: 0.8 });
+  await items(copper.org.id, [0, 2, 3, 6, 7], { stock: true, markup: 0.78 });
+  const centralItems = await items(central.org.id, [0, 2, 3, 4, 6], { stock: true });
+  await items(kabwe.org.id, [2, 3], { stock: true });
+
+  // ── Connections ────────────────────────────────────────────────────────────
+  async function link(seller: { org: { id: string } }, buyer: { org: { id: string } }, status = "ACTIVE", requestedBy?: { org: { id: string } }) {
+    return db.tradeLink.create({
+      data: {
+        sellerOrgId: seller.org.id,
+        buyerOrgId: buyer.org.id,
+        status,
+        requestedByOrgId: (requestedBy ?? buyer).org.id,
+        respondedAt: status === "PENDING" ? null : new Date(),
       },
     });
   }
+  await link(zpi, kilmers, "ACTIVE", zpi);
+  await link(apex, kilmers);
+  await link(zpi, copper);
+  await link(kilmers, central);
+  await link(kilmers, uth, "ACTIVE", kilmers);
+  await link(copper, central);
+  await link(kilmers, kabwe, "PENDING");
+  await link(central, hope);
 
-  await db.sale.create({
+  // A private contact: a customer of Kilmer's that isn't on Parallax.
+  await db.contact.create({
     data: {
-      invoiceNo: "INV-TODAY-1",
-      cashierId: sales.id,
-      patientId: patients[2].id,
-      subtotal: vitamin.sellingPrice,
-      tax: 0,
-      discount: 0,
-      total: vitamin.sellingPrice,
-      payment: "MOBILE",
+      orgId: kilmers.org.id,
+      role: "CUSTOMER",
+      kind: "CLIENT",
+      name: "Mansa District Hospital",
+      town: "Mansa",
+      address: "Hospital Road, Mansa",
+      phone: "+260 212 821 000",
+      email: "stores@mansahospital.example",
+    },
+  });
+
+  // ── Orders ─────────────────────────────────────────────────────────────────
+  async function event(orderId: string, status: string, actor: { org: { id: string; name: string }; user: { name: string } }, message?: string) {
+    await db.tradeOrderEvent.create({ data: { orderId, status, actorOrgId: actor.org.id, actorName: actor.user.name, message } });
+  }
+
+  // 1. Lusaka Central asks Kilmer's for prices (new inquiry).
+  const inquiry = await db.tradeOrder.create({
+    data: {
+      sellerOrgId: kilmers.org.id,
+      buyerOrgId: central.org.id,
+      createdByOrgId: central.org.id,
+      sellerName: kilmers.org.name,
+      buyerName: central.org.name,
+      inquiryNo: no("INQ"),
+      paymentTerms: "CREDIT",
+      buyerMessage: "Please include your best price for 20+ boxes.",
       items: {
         create: [
-          {
-            productId: vitamin.id,
-            quantity: 1,
-            unitPrice: vitamin.sellingPrice,
-            total: vitamin.sellingPrice,
-          },
+          { name: kilmersItems[0].name, strength: kilmersItems[0].strength, form: kilmersItems[0].form, unit: kilmersItems[0].unit, quantity: 20, sellerProductId: kilmersItems[0].id, buyerProductId: centralItems[0].id },
+          { name: kilmersItems[3].name, strength: kilmersItems[3].strength, form: kilmersItems[3].form, unit: kilmersItems[3].unit, quantity: 50, sellerProductId: kilmersItems[3].id, buyerProductId: centralItems[2].id },
         ],
       },
     },
   });
+  await event(inquiry.id, "INQUIRY", central, "Inquiry sent");
 
-  await db.purchaseOrder.create({
+  // 2. UTH has a quote from Kilmer's to review.
+  const quoted = await db.tradeOrder.create({
     data: {
-      reference: "PO-24018",
-      supplierId: medline.id,
-      createdById: sales.id,
-      status: "SENT",
-      notes: "Restock azithromycin and insulin",
-      items: {
-        create: [
-          { productId: products[1].id, quantity: 80, unitCost: products[1].costPrice },
-          { productId: products[7].id, quantity: 20, unitCost: products[7].costPrice },
-        ],
-      },
-      events: { create: { status: "SENT", message: "Order sent to the manufacturer", actorName: sales.name } },
-    },
-  });
-
-  // MedLine has a manufacturer login: it prices, invoices and dispatches in Parallax.
-  await db.user.create({
-    data: {
-      email: "medline@pharmacore.local",
-      name: "Priya Shah",
-      passwordHash: await password("Maker123!"),
-      role: "MANUFACTURER",
-      supplierId: medline.id,
-    },
-  });
-  const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
-  const dispatchedLines = [
-    { product: products[2], quantity: 120, unitCost: Math.round(products[2].costPrice * 0.95 * 100) / 100 },
-    { product: products[5], quantity: 60, unitCost: Math.round(products[5].costPrice * 0.95 * 100) / 100 },
-  ];
-  const dispatchedTotal = dispatchedLines.reduce((sum, line) => sum + line.quantity * line.unitCost, 0);
-  await db.purchaseOrder.create({
-    data: {
-      reference: "PO-24011",
-      supplierId: medline.id,
-      createdById: sales.id,
-      createdAt: daysAgo(12),
-      status: "DISPATCHED",
-      quotedAmount: Math.round(dispatchedTotal * 100) / 100,
-      quotedAt: daysAgo(11),
-      readyOn: daysAgo(5),
-      validUntil: daysAgo(-10),
-      supplierMessage: "Prices held from last quarter.",
-      invoiceNo: "ML-INV-77310",
-      invoicedAt: daysAgo(4),
-      dueOn: daysAgo(-26),
-      amountPaid: Math.round(dispatchedTotal * 0.4 * 100) / 100,
-      dispatchedAt: daysAgo(2),
-      deliveryNoteNo: "ML-DN-5512",
-      deliveryMethod: "MedLine truck",
-      items: {
-        create: dispatchedLines.map((line) => ({
-          productId: line.product.id,
-          quantity: line.quantity,
-          unitCost: line.unitCost,
-          qtyDispatched: line.quantity,
-        })),
-      },
-      events: {
-        create: [
-          { status: "SENT", message: "Order sent to the manufacturer", actorName: sales.name, createdAt: daysAgo(12) },
-          { status: "QUOTED", message: "Prices held from last quarter.", actorName: "Priya Shah (MedLine Wholesale)", createdAt: daysAgo(11) },
-          { status: "ACCEPTED", message: "Price accepted", actorName: finance.name, createdAt: daysAgo(10) },
-          { status: "ACCEPTED", message: "Invoice ML-INV-77310 issued", actorName: "Priya Shah (MedLine Wholesale)", createdAt: daysAgo(4) },
-          { status: "DISPATCHED", message: "Dispatched with delivery note ML-DN-5512", actorName: "Priya Shah (MedLine Wholesale)", createdAt: daysAgo(2) },
-        ],
-      },
-    },
-  });
-  // Apex has no login: finance enters its paper quotation.
-  await db.purchaseOrder.create({
-    data: {
-      reference: "PO-24015",
-      supplierId: apex.id,
-      createdById: sales.id,
-      createdAt: daysAgo(3),
+      sellerOrgId: kilmers.org.id,
+      buyerOrgId: uth.org.id,
+      createdByOrgId: uth.org.id,
+      sellerName: kilmers.org.name,
+      buyerName: uth.org.name,
+      inquiryNo: no("INQ"),
+      quoteNo: no("QT"),
       status: "QUOTED",
-      quotedAmount: Math.round(products[3].costPrice * 200 * 100) / 100,
-      quotedAt: daysAgo(1),
-      readyOn: daysAgo(-7),
-      validUntil: daysAgo(-14),
-      items: { create: [{ productId: products[3].id, quantity: 200, unitCost: products[3].costPrice }] },
-      events: {
-        create: [
-          { status: "SENT", message: "Order sent to the manufacturer", actorName: sales.name, createdAt: daysAgo(3) },
-          { status: "QUOTED", message: "Price entered from Apex's quotation", actorName: `${finance.name} for Apex Generics`, createdAt: daysAgo(1) },
-        ],
-      },
-    },
-  });
-
-  const uth = await db.institution.create({
-    data: {
-      name: "University Teaching Hospital",
-      kind: "HOSPITAL",
-      license: "MOH-UTH-01",
-      contact: "Procurement desk",
-      phone: "+260 211 251 000",
-      email: "stores@uth.example",
-      address: "Nationalist Road, Lusaka",
-      users: {
-        create: {
-          email: "uth@pharmacore.local",
-          name: "Mwaka Banda",
-          passwordHash: await password("Buyer123!"),
-          role: "BUYER",
-        },
-      },
-    },
-    include: { users: true },
-  });
-  const clinic = await db.institution.create({
-    data: {
-      name: "Kabulonga Family Clinic",
-      kind: "CLINIC",
-      license: "HPCZ-CL-441",
-      contact: "Sister-in-charge",
-      phone: "+260 211 555 220",
-      email: "orders@kabulonga.example",
-      address: "Kabulonga, Lusaka",
-      users: {
-        create: {
-          email: "clinic@pharmacore.local",
-          name: "Grace Phiri",
-          passwordHash: await password("Buyer123!"),
-          role: "BUYER",
-        },
-      },
-    },
-    include: { users: true },
-  });
-  await db.institution.create({
-    data: {
-      name: "Garden Compound Pharmacy",
-      kind: "PHARMACY",
-      license: "ZAMRA-RT-19",
-      contact: "Owner pharmacist",
-      phone: "+260 977 555 018",
-      email: "desk@gardenpharmacy.example",
-      address: "Great East Road, Lusaka",
-      users: {
-        create: {
-          email: "partner@pharmacore.local",
-          name: "Joseph Zulu",
-          passwordHash: await password("Buyer123!"),
-          role: "BUYER",
-        },
-      },
-    },
-  });
-
-  const uthBuyer = uth.users[0];
-  const clinicBuyer = clinic.users[0];
-  const gloves = products.find((p) => p.sku === "GLV-NTR-100") ?? products[products.length - 1];
-  const oximeter = products.find((p) => p.sku === "OXM-FNG-01") ?? products[products.length - 2];
-
-  await db.consignment.create({
-    data: {
-      reference: "CN-UTH-2401",
-      institutionId: uth.id,
-      requestedById: uthBuyer.id,
-      status: "REQUESTED",
-      notes: "Emergency stores restock for medical wards.",
-      deliveryAddress: "UTH main pharmacy receiving bay",
-      items: {
-        create: [
-          { productId: products[0].id, quantity: 200 },
-          { productId: products[6].id, quantity: 150 },
-          { productId: gloves.id, quantity: 40 },
-        ],
-      },
-      events: {
-        create: {
-          status: "REQUESTED",
-          message: "Order request sent",
-          actorName: uthBuyer.name,
-        },
-      },
-    },
-  });
-
-  await db.consignment.create({
-    data: {
-      reference: "CN-KAB-2408",
-      institutionId: clinic.id,
-      requestedById: clinicBuyer.id,
-      quotedById: finance.id,
-      status: "QUOTED",
-      notes: "Clinic opening pack plus diagnostics.",
-      deliveryAddress: "Kabulonga Family Clinic stores",
-      quotedAmount: 18640,
-      taxRate: 0,
+      paymentTerms: "CREDIT",
+      creditDays: 30,
+      quotedAt: subDays(new Date(), 1),
       readyOn: addDays(new Date(), 3),
       validUntil: addDays(new Date(), 14),
-      quotedAt: new Date(),
-      terms: "Prices are in Zambian Kwacha and valid for 14 days. Delivery within Lusaka is included.",
-      adminMessage: "Full consignment can be ready in three days. Amount is ZMW 18,640 including delivery in Lusaka.",
+      sellerMessage: "Prices held for 14 days.",
       items: {
         create: [
-          { productId: products[2].id, quantity: 80, unitPrice: 220 },
-          { productId: oximeter.id, quantity: 4, unitPrice: 260 },
-        ],
-      },
-      events: {
-        create: [
-          {
-            status: "REQUESTED",
-            message: "Order request sent",
-            actorName: clinicBuyer.name,
-            createdAt: subDays(new Date(), 1),
-          },
-          {
-            status: "QUOTED",
-            message: "Quoted K 18640.00 · ready in 3 days.",
-            actorName: finance.name,
-          },
+          { name: kilmersItems[5].name, strength: kilmersItems[5].strength, form: kilmersItems[5].form, unit: kilmersItems[5].unit, quantity: 40, sellerProductId: kilmersItems[5].id, unitPrice: 88 },
+          { name: kilmersItems[7].name, form: kilmersItems[7].form, unit: kilmersItems[7].unit, quantity: 30, sellerProductId: kilmersItems[7].id, unitPrice: 99 },
         ],
       },
     },
   });
+  await db.tradeOrder.update({ where: { id: quoted.id }, data: { quotedAmount: 40 * 88 + 30 * 99 } });
+  await event(quoted.id, "INQUIRY", uth, "Inquiry sent");
+  await event(quoted.id, "QUOTED", kilmers, "Quote sent");
 
-  await db.auditLog.create({
+  // 3. Kilmer's purchase from Zambia Pharma Industries is on the way.
+  const po = await db.tradeOrder.create({
     data: {
-      userId: admin.id,
-      action: "SYSTEM_SEEDED",
-      entity: "Pharmacy",
-      entityId: "main",
-      details: "Demonstration database created",
+      sellerOrgId: zpi.org.id,
+      buyerOrgId: kilmers.org.id,
+      createdByOrgId: kilmers.org.id,
+      sellerName: zpi.org.name,
+      buyerName: kilmers.org.name,
+      inquiryNo: no("INQ"),
+      quoteNo: no("QT"),
+      poNumber: no("PO"),
+      deliveryNoteNo: no("DN"),
+      status: "DISPATCHED",
+      paymentTerms: "ON_DELIVERY",
+      quotedAt: subDays(new Date(), 6),
+      orderedAt: subDays(new Date(), 5),
+      dispatchedAt: subDays(new Date(), 1),
+      quotedAmount: 100 * 92 + 60 * 48,
+      deliveryMethod: "Supplier truck",
+      vehicleDriver: "ABZ 4411 · J. Lungu",
+      items: {
+        create: [
+          { name: zpiItems[0].name, strength: zpiItems[0].strength, form: zpiItems[0].form, unit: zpiItems[0].unit, quantity: 100, sellerProductId: zpiItems[0].id, buyerProductId: kilmersItems[0].id, unitPrice: 92, qtyDispatched: 100 },
+          { name: zpiItems[4].name, strength: zpiItems[4].strength, form: zpiItems[4].form, unit: zpiItems[4].unit, quantity: 60, sellerProductId: zpiItems[4].id, buyerProductId: kilmersItems[5].id, unitPrice: 48, qtyDispatched: 60 },
+        ],
+      },
     },
   });
+  await event(po.id, "INQUIRY", kilmers, "Inquiry sent");
+  await event(po.id, "QUOTED", zpi, "Quote sent");
+  await event(po.id, "ORDERED", kilmers, "Quote accepted and purchase order sent");
+  await event(po.id, "DISPATCHED", zpi, "Dispatched with delivery note");
 
-  console.log("Parallax seeded.");
-  console.log("Admin:            admin@pharmacore.local / Admin123!");
-  console.log("Finance:          finance@pharmacore.local / Finance123!");
-  console.log("Sales:            sales@pharmacore.local / Sales123!");
-  console.log("Manufacturer:     medline@pharmacore.local / Maker123!");
-  console.log("UTH buyer:        uth@pharmacore.local / Buyer123!");
-  console.log("Clinic buyer:     clinic@pharmacore.local / Buyer123!");
-  console.log("Pharmacy buyer:   partner@pharmacore.local / Buyer123!");
+  // 4. A finished order: Kilmer's sold to Lusaka Central, invoiced and paid.
+  const closed = await db.tradeOrder.create({
+    data: {
+      sellerOrgId: kilmers.org.id,
+      buyerOrgId: central.org.id,
+      createdByOrgId: central.org.id,
+      sellerName: kilmers.org.name,
+      buyerName: central.org.name,
+      inquiryNo: no("INQ"),
+      quoteNo: no("QT"),
+      poNumber: no("PO"),
+      invoiceNo: no("INV"),
+      deliveryNoteNo: no("DN"),
+      status: "CLOSED",
+      paymentTerms: "CREDIT",
+      quotedAmount: 30 * 52,
+      amountPaid: 30 * 52,
+      createdAt: subDays(new Date(), 20),
+      quotedAt: subDays(new Date(), 19),
+      orderedAt: subDays(new Date(), 18),
+      dispatchedAt: subDays(new Date(), 16),
+      invoicedAt: subDays(new Date(), 16),
+      dueOn: addDays(subDays(new Date(), 16), 30),
+      receivedAt: subDays(new Date(), 15),
+      closedAt: subDays(new Date(), 3),
+      items: {
+        create: [
+          { name: kilmersItems[2].name, strength: kilmersItems[2].strength, form: kilmersItems[2].form, unit: kilmersItems[2].unit, quantity: 30, sellerProductId: kilmersItems[2].id, buyerProductId: centralItems[1].id, unitPrice: 52, qtyDispatched: 30, qtyReceived: 30 },
+        ],
+      },
+      payments: { create: [{ amount: 30 * 52, method: "BANK_TRANSFER", paidOn: subDays(new Date(), 3), reference: "ZANACO-88211", recordedBy: kilmers.user.name }] },
+    },
+  });
+  await event(closed.id, "CLOSED", kilmers, "Paid in full");
+
+  // ── Retail counter (Lusaka Central) ─────────────────────────────────────────
+  const patient = await db.patient.create({
+    data: { orgId: central.org.id, firstName: "Thandiwe", lastName: "Mbewe", gender: "F", dateOfBirth: "1986-04-12", phone: "+260 977 123 456", allergies: "Penicillin" },
+  });
+  await db.patient.create({ data: { orgId: central.org.id, firstName: "Joseph", lastName: "Kunda", gender: "M", phone: "+260 966 222 333" } });
+  await db.prescription.create({
+    data: {
+      orgId: central.org.id,
+      rxNumber: no("RX"),
+      patientId: patient.id,
+      prescriber: "Dr L. Siame",
+      clinic: "Levy Mwanawasa Hospital",
+      items: { create: [{ orgId: central.org.id, productId: centralItems[3].id, quantity: 1, dosage: "1 tablet daily" }] },
+    },
+  });
+  for (let day = 0; day < 10; day++) {
+    const price = centralItems[2].sellingPrice;
+    await db.sale.create({
+      data: {
+        orgId: central.org.id,
+        invoiceNo: no("RCT"),
+        cashierId: central.user.id,
+        cashierName: central.user.name,
+        subtotal: price * 2,
+        tax: 0,
+        total: price * 2,
+        payment: day % 2 ? "MOBILE" : "CASH",
+        createdAt: subDays(new Date(), day),
+        items: { create: [{ orgId: central.org.id, productId: centralItems[2].id, quantity: 2, unitPrice: price, total: price * 2 }] },
+      },
+    });
+  }
+
+  // ── Notifications and an announcement ──────────────────────────────────────
+  await db.notification.create({
+    data: { orgId: kilmers.org.id, type: "INQUIRY", title: `New inquiry from ${central.org.name}`, link: `/orders/${inquiry.id}` },
+  });
+  await db.notification.create({
+    data: { orgId: kilmers.org.id, type: "CONNECTION", title: `${kabwe.org.name} asked to connect`, link: "/customers" },
+  });
+  await db.notification.create({
+    data: { orgId: uth.org.id, type: "QUOTED", title: `Quote received from ${kilmers.org.name}`, link: `/purchases/${quoted.id}` },
+  });
+  await db.announcement.create({
+    data: { audience: "ALL", title: "Welcome to Parallax", body: "Connect with your suppliers and customers from Find businesses." },
+  });
+
+  await db.demoRequest.create({
+    data: { name: "Bwalya Chisanga", company: "Northern Medical Wholesale", phone: "+260 977 000 111", email: "bwalya@northern.example", notes: "About 400 items." },
+  });
+
+  console.log(`Seeded the demo network. Every login's password: ${DEMO_PASSWORD}`);
 }
 
 main()
-  .then(() => db.$disconnect())
-  .catch(async (error) => {
+  .catch((error) => {
     console.error(error);
-    await db.$disconnect();
     process.exit(1);
-  });
+  })
+  .finally(() => raw.$disconnect());

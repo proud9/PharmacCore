@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canSell, requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { apiTenant } from "@/lib/tenant";
 import { deductStock } from "@/lib/inventory";
 import { audit } from "@/lib/audit";
 import { ref } from "@/lib/utils";
@@ -21,9 +20,10 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const user = await requireUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canSell(user.role)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  const auth = await apiTenant("counter");
+  if (!auth.ok) return auth.response;
+  const { t } = auth;
+  const { db, user } = t;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -31,17 +31,21 @@ export async function POST(request: Request) {
   }
 
   try {
-    const sale = await db.$transaction(async (tx) => {
+    if (parsed.data.patientId && (await db.patient.count({ where: { id: parsed.data.patientId } })) === 0) {
+      return NextResponse.json({ error: "Choose the patient again." }, { status: 400 });
+    }
+    const sale = await t.tx(async (tx) => {
       let subtotal = 0;
       let tax = 0;
       const lines = [];
       for (const item of parsed.data.items) {
-        const product = await tx.product.findUnique({ where: { id: item.productId } });
+        const product = await tx.product.findFirst({ where: { id: item.productId } });
         if (!product || !product.active) throw new Error("Unknown product");
         const line = product.sellingPrice * item.quantity;
         subtotal += line;
         tax += line * ((product.taxRate ?? 0) / 100);
         lines.push({
+          orgId: t.org.id,
           productId: product.id,
           quantity: item.quantity,
           unitPrice: product.sellingPrice,
@@ -56,8 +60,10 @@ export async function POST(request: Request) {
 
       return tx.sale.create({
         data: {
+          orgId: t.org.id,
           invoiceNo: ref("INV"),
           cashierId: user.id,
+          cashierName: user.name,
           patientId: parsed.data.patientId || null,
           subtotal,
           tax,
@@ -69,8 +75,7 @@ export async function POST(request: Request) {
       });
     });
 
-    await audit({
-      userId: user.id,
+    await audit(t, {
       action: "SALE_COMPLETED",
       entity: "Sale",
       entityId: sale.id,

@@ -1,18 +1,14 @@
+import { pageTenant } from "@/lib/tenant";
 import { format, startOfDay, subDays } from "date-fns";
-import { redirect } from "next/navigation";
-import { canFinance, requireUser } from "@/lib/auth";
-import { homePath } from "@/lib/paths";
-import { db } from "@/lib/db";
-import { getPharmacy } from "@/lib/pharmacy";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { money } from "@/lib/utils";
 import { MixChart } from "@/components/charts";
 
 export default async function ReportsPage() {
-  const user = await requireUser();
-  if (!user || !canFinance(user.role)) redirect(homePath(user?.role ?? ""));
-  const pharmacy = await getPharmacy();
+  const t = await pageTenant("counter");
+  const { db } = t;
+  const pharmacy = t.org;
   const currency = pharmacy?.currency ?? "ZMW";
   const since = subDays(startOfDay(new Date()), 30);
   const inWindow = { createdAt: { gte: since } };

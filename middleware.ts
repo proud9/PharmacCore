@@ -1,10 +1,26 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
-import { homePath } from "@/lib/paths";
+import { homePath } from "@/lib/capabilities";
 
-const PUBLIC = ["/", "/login", "/setup", "/terms", "/privacy", "/api/auth/signout", "/api/setup", "/api/auth/login", "/api/auth/register", "/api/demo-requests"];
+const PUBLIC = [
+  "/",
+  "/login",
+  "/signup",
+  "/terms",
+  "/privacy",
+  "/api/auth/signout",
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/demo-requests",
+];
 
+/**
+ * First gate only: signed in or not, and which area a role belongs in. Every page and route
+ * still checks the business and its capabilities itself (lib/tenant.ts).
+ * - ADMIN (Parallax team) is confined to /admin and /api/admin.
+ * - Businesses can never open /admin.
+ */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname.startsWith("/_next") || pathname.startsWith("/favicon") || pathname.includes(".")) {
@@ -25,69 +41,45 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isPublic) {
-    if (token && pathname === "/login") {
+    if (token && (pathname === "/login" || pathname === "/signup")) {
       const role = await roleFromToken();
-      if (role) {
-        const url = request.nextUrl.clone();
-        url.pathname = homePath(role);
-        return NextResponse.redirect(url);
-      }
+      if (role) return redirect(request, homePath(role));
     }
     return NextResponse.next();
   }
 
-  if (!token) {
-    if (pathname.startsWith("/api")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
-  }
-
   const role = await roleFromToken();
   if (!role) {
+    if (pathname.startsWith("/api")) return NextResponse.json({ error: "Please sign in." }, { status: 401 });
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    url.search = "";
+    if (token) url.searchParams.set("ended", "1");
+    else url.searchParams.set("next", pathname);
+    const response = NextResponse.redirect(url);
+    if (token) response.cookies.delete("pharmacore_session");
+    return response;
   }
 
-  if (
-    role === "BUYER" &&
-    !pathname.startsWith("/portal") &&
-    !pathname.startsWith("/api/") &&
-    !pathname.startsWith("/documents")
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/portal";
-    return NextResponse.redirect(url);
+  const adminArea = pathname === "/admin" || pathname.startsWith("/admin/") || pathname.startsWith("/api/admin");
+  const shared = pathname.startsWith("/account") || pathname.startsWith("/api/account") || pathname === "/api/auth/logout";
+  if (role === "ADMIN") {
+    if (adminArea || shared || pathname.startsWith("/api/demo-requests")) return NextResponse.next();
+    if (pathname.startsWith("/api")) return NextResponse.json({ error: "Your account can't do that." }, { status: 403 });
+    return redirect(request, "/admin");
   }
-
-  if (
-    role === "MANUFACTURER" &&
-    !pathname.startsWith("/supplier") &&
-    !pathname.startsWith("/api/") &&
-    !pathname.startsWith("/documents")
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/supplier";
-    return NextResponse.redirect(url);
+  if (adminArea) {
+    if (pathname.startsWith("/api")) return NextResponse.json({ error: "Your account can't do that." }, { status: 403 });
+    return redirect(request, homePath(role));
   }
-
-  if (role !== "MANUFACTURER" && pathname.startsWith("/supplier")) {
-    const url = request.nextUrl.clone();
-    url.pathname = homePath(role);
-    return NextResponse.redirect(url);
-  }
-
-  if (role !== "BUYER" && pathname.startsWith("/portal")) {
-    const url = request.nextUrl.clone();
-    url.pathname = homePath(role);
-    return NextResponse.redirect(url);
-  }
-
   return NextResponse.next();
+}
+
+function redirect(request: NextRequest, pathname: string) {
+  const url = request.nextUrl.clone();
+  url.pathname = pathname;
+  url.search = "";
+  return NextResponse.redirect(url);
 }
 
 export const config = {

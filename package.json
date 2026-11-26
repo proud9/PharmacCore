@@ -8,14 +8,15 @@
     "dev:webpack": "next dev",
     "build": "next build",
     "start": "next start",
-    "setup": "prisma generate && prisma db push && tsx prisma/seed.ts",
-    "setup:empty": "prisma generate && prisma db push",
-    "db:push": "prisma db push",
+    "setup": "prisma generate && tsx scripts/db.ts push && tsx prisma/seed.ts",
+    "setup:empty": "prisma generate && tsx scripts/db.ts push",
+    "db:push": "tsx scripts/db.ts push",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "db:migrate-roles": "tsx scripts/migrate-roles.ts",
     "test": "tsx scripts/test/run.ts",
-    "demo": "tsx scripts/demo.ts"
+    "demo": "tsx scripts/demo.ts",
+    "db:reset": "tsx scripts/db.ts push --reset && tsx prisma/seed.ts",
+    "admin:create": "tsx scripts/create-admin.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

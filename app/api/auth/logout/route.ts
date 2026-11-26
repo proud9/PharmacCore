@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { clearSessionCookie, readSession } from "@/lib/auth";
+import { clearSessionCookie } from "@/lib/auth";
+import { getTenant } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 
 export async function POST() {
-  const session = await readSession();
+  const t = await getTenant();
+  if (t) await audit(t, { action: "LOGOUT", entity: "User", entityId: t.user.id });
   await clearSessionCookie();
-  if (session) {
-    await audit({ userId: session.id, action: "LOGOUT", entity: "User", entityId: session.id });
-  }
   return NextResponse.json({ ok: true });
 }

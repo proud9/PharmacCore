@@ -4,15 +4,14 @@
  * timed so slow steps show up in the summary.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { ensureProdBuild } from "../prod-build";
+import { envForDatabase, pushSchema } from "../db";
 
 export const ROOT = path.resolve(__dirname, "..", "..");
 const NODE = process.execPath;
 const NEXT_BIN = path.join(ROOT, "node_modules", "next", "dist", "bin", "next");
-const PRISMA_BIN = path.join(ROOT, "node_modules", "prisma", "build", "index.js");
 const TSX_BIN = path.join(ROOT, "node_modules", "tsx", "dist", "cli.mjs");
 
 /** Requests slower than this are listed as possible bottlenecks. */
@@ -129,7 +128,7 @@ export function heading(html: string) {
 }
 
 /** Raw codes and broken values that should never reach the screen. */
-const RAW = /\b(REQUESTED|QUOTED|ACCEPTED|PREPARING|DISPATCHED|DELIVERED|DECLINED|CANCELLED|PENDING|DISPENSED|COMPLETED|WHOLESALE_ADMIN|PHARMACIST|CASHIER|MEDICINE|EQUIPMENT|undefined|null|NaN|Invalid Date)\b/g;
+const RAW = /\b(INQUIRY|QUOTED|ORDERED|PREPARING|DISPATCHED|RECEIVED|DECLINED|CANCELLED|PENDING|DISPENSED|COMPLETED|PREPAY|ON_DELIVERY|CREDIT|WHOLESALER|RETAILER|MANUFACTURER|BANK_TRANSFER|MEDICINE|EQUIPMENT|undefined|null|NaN|Invalid Date)\b/g;
 
 /** Notes wording problems on a page: raw codes, "undefined", and retail words on wholesale screens. */
 export function scanLabels(who: string, url: string, html: string, extraWords: RegExp[] = []) {
@@ -145,17 +144,29 @@ export function scanLabels(who: string, url: string, html: string, extraWords: R
 // ---------------------------------------------------------------------------------------------
 // Disposable database + server
 
-export function freshDatabase(file: string, seed: boolean) {
-  const target = path.join(ROOT, "prisma", file);
-  for (const suffix of ["", "-journal"]) if (existsSync(target + suffix)) rmSync(target + suffix);
-  const env = { ...process.env, DATABASE_URL: `file:./${file}` };
-  const push = spawnSync(NODE, [PRISMA_BIN, "db", "push", "--skip-generate"], { cwd: ROOT, env, encoding: "utf8" });
-  if (push.status !== 0) throw new Error(`prisma db push failed:\n${push.stdout}\n${push.stderr}`);
+/**
+ * Connection settings for a throwaway test database `parallax_test_<name>`, using the same
+ * server, roles and passwords as .env (roles are shared by every database on a server).
+ */
+export function testEnv(name: string): NodeJS.ProcessEnv {
+  return envForDatabase(`parallax_test_${name}`);
+}
+
+/** Drops and recreates the suite's database (schema + row-level security), optionally seeded. */
+export async function freshDatabase(name: string, seed: boolean) {
+  const env = testEnv(name);
+  await pushSchema(env, { recreate: true, quiet: true });
   if (seed) {
-    const run = spawnSync(NODE, [TSX_BIN, "prisma/seed.ts"], { cwd: ROOT, env, encoding: "utf8" });
+    const run = spawnSync(NODE, [TSX_BIN, "prisma/seed.ts"], { cwd: ROOT, env: { ...process.env, ...env }, encoding: "utf8" });
     if (run.status !== 0) throw new Error(`seed failed:\n${run.stdout}\n${run.stderr}`);
   }
-  return new PrismaClient({ datasourceUrl: `file:${target}` });
+  // The owner connection: for checks that look past row-level security.
+  return { env, db: new PrismaClient({ datasourceUrl: env.DIRECT_URL }) };
+}
+
+/** Runs a script (tsx) against the suite's database. */
+export function runScript(env: NodeJS.ProcessEnv, script: string, args: string[] = []) {
+  return spawnSync(NODE, [TSX_BIN, script, ...args], { cwd: ROOT, env: { ...process.env, ...env }, encoding: "utf8" });
 }
 
 const DIST_DIR = ".next-test";
@@ -165,10 +176,10 @@ export function ensureBuild(force: boolean) {
   ensureProdBuild(DIST_DIR, force);
 }
 
-export async function startServer(file: string, port: number): Promise<ChildProcess> {
+export async function startServer(env: NodeJS.ProcessEnv, port: number): Promise<ChildProcess> {
   const server = spawn(NODE, [NEXT_BIN, "start", "-p", String(port)], {
     cwd: ROOT,
-    env: { ...process.env, DATABASE_URL: `file:./${file}`, COOKIE_SECURE: "false", NODE_ENV: "production", NEXT_DIST_DIR: DIST_DIR },
+    env: { ...process.env, ...env, COOKIE_SECURE: "false", NODE_ENV: "production", NEXT_DIST_DIR: DIST_DIR },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let log = "";

@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 
+export type LookupKind = "products" | "patients" | "businesses";
+
 /**
- * Fetches matches from /api/lookup as the user types (debounced). `params` adds filters such as
+ * Fetches matches as the user types (debounced): items and patients from /api/lookup, businesses
+ * (Parallax team only) from /api/admin/businesses. `params` adds filters such as
  * `{ rx: "1" }`. Call `reload()` after a change that alters the results, e.g. stock after a sale.
  */
 export function useLookup<T>(
-  kind: "products" | "patients",
+  kind: LookupKind,
   query: string,
   params: Record<string, string> = {},
   enabled = true,
@@ -25,8 +28,11 @@ export function useLookup<T>(
     const timer = setTimeout(
       async () => {
         try {
-          const search = new URLSearchParams({ kind, q, ...JSON.parse(paramKey) });
-          const response = await fetch(`/api/lookup?${search}`, { signal: controller.signal });
+          const url =
+            kind === "businesses"
+              ? `/api/admin/businesses?${new URLSearchParams({ q })}`
+              : `/api/lookup?${new URLSearchParams({ kind, q, ...JSON.parse(paramKey) })}`;
+          const response = await fetch(url, { signal: controller.signal });
           const data = await response.json();
           if (response.ok) setResults(data.results ?? []);
         } catch {

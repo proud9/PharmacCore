@@ -1,81 +1,103 @@
 # Parallax
 
-Parallax runs a medical wholesale: inventory with batches and expiry dates, purchase orders from manufacturers, and orders from pharmacies, hospitals and clinics through to dispatch. It also covers retail counter sales and prescriptions. Amounts are in Kwacha (ZMW).
+Parallax is a trading network for medicine supply in Zambia. Manufacturers, wholesalers, retailers (pharmacies) and clients (hospitals, clinics, schools, NGOs) each have a private account. They trade with each other the way they would going from business to business for quotes, but on the system: inquiry → quotation → purchase order → invoice and delivery note → payment. Wholesalers and retailers also keep inventory with batches and expiry dates, and retailers have a sales counter with patients and prescriptions. Amounts are in Kwacha (ZMW).
 
-The name: parallax is the way one object looks different from different points of view. Management, warehouse staff and finance each get their own view of the same live data.
+No business can see another's prices, stock or documents. A buyer sees a supplier's item names (never prices) only once both have connected. Prices exist only in the quote a seller sends to that one buyer.
 
-## Setting up for a real wholesale
+## Requirements
 
-For a live installation, create the database without demo data, start the app, and open it in a browser:
+- Node.js and npm
+- PostgreSQL 15 or newer. On a Mac: `brew install postgresql@17 && brew services start postgresql@17`.
 
-```powershell
-npm.cmd install
-npm.cmd run setup:empty
-npm.cmd run dev
-```
+## Setup
 
-Choose **Create an account** (or go to `/setup`) and follow the four steps: owner account, company details, logo and bank details. Logo and bank details can be added later under Pharmacy details. Once a wholesale is set up, the page offers sign-in and your customers can create their own accounts.
+1. Copy `.env.example` to `.env` and fill it in:
+   - the three database URLs;
+   - `AUTH_SECRET`, a long random string;
+   - `DATA_KEY`, the field encryption key. Back it up: encrypted fields can't be read without it.
+2. Install and create the database:
 
-## Setup and start
+   ```bash
+   npm install
+   npm run setup
+   ```
 
-Requirements: Node.js and npm.
+   This creates the database and its two roles, pushes the schema, applies row-level security (`prisma/rls.sql`) and loads demo data. Use `npm run setup:empty` for a real installation without demo data.
+3. Create a login for the Parallax team (there is no public sign-up for it):
 
-```powershell
-npm.cmd install
-npm.cmd run setup
-npm.cmd run dev
-```
+   ```bash
+   npm run admin:create -- --email you@example.com --name "Your Name"
+   ```
 
-Open http://localhost:3000. Stop the development server with `Ctrl+C`.
+   It prints a temporary password, which you change at first sign-in.
+4. Start the app:
 
-For an existing database, apply schema changes before starting the updated app:
+   ```bash
+   npm run dev
+   ```
 
-```powershell
-npm.cmd run db:push
-```
+   Open http://localhost:3000. For day-to-day use, `npm run build` then `npm start` is much faster.
 
-The development server (`npm run dev`, Turbopack) compiles each page on first visit. For day-to-day use, run the production build instead, which is much faster:
+After schema changes, run `npm run db:push`. `npm run db:reset` recreates the database with demo data.
 
-```powershell
-npm.cmd run build
-npm.cmd start
-```
+Production sign-in cookies are HTTPS-only. Set `COOKIE_SECURE="false"` only to run `npm start` over plain HTTP on a trusted local network.
 
-In Claude Code's desktop app, the `parallax-prod` preview in `.claude/launch.json` runs the built app on port 3100 over plain HTTP.
+## Account types
 
-Production sign-in cookies are HTTPS-only. To use `npm start` over plain HTTP on a trusted local network, set `COOKIE_SECURE="false"` in `.env`.
+| Account | Created by | Sells to | Buys from | Has |
+| --- | --- | --- | --- | --- |
+| **Parallax team** | `npm run admin:create` | — | — | Businesses, logins, subscriptions, announcements, demo requests. No access to any business's stock, prices or documents. |
+| **Manufacturer** | Sign-up, or the Parallax team | Wholesalers | — | Item list (no stock), orders, documents |
+| **Wholesaler** | Sign-up, or the Parallax team | Retailers, clients | Manufacturers | Inventory and stock take, orders, purchases |
+| **Retailer** | Sign-up, or the Parallax team | Clients | Wholesalers | Inventory, sales counter, patients, prescriptions, orders, purchases |
+| **Client** | Sign-up, or the Parallax team | — | Wholesalers, retailers | Purchases. Free of charge. |
 
-`npm run setup` creates or updates the local database and seeds demonstration data. Seeding resets the demo database; do not use it against production data.
+Each business has one login. Businesses sign up at `/signup` (or "Create an account" on the landing page). Manufacturers, wholesalers and retailers start with a 30-day trial; the Parallax team records subscription payments by hand. Fourteen days after a subscription ends, the account becomes read-only until it is renewed.
 
-## Account types and how each is created
+## How trading works
 
-| Account | Who creates it | Where | Signs in to |
-| --- | --- | --- | --- |
-| **Administrator** (the wholesale's owner) | The wholesaler, once per installation | `/setup`: the landing page's "Create an account" goes there until the wholesale exists. More administrators: an administrator, under **Staff** | Home dashboard |
-| **Finance** | An administrator | **Staff** → Add staff, role Finance | Payments |
-| **Sales** | An administrator | **Staff** → Add staff, role Sales | Wholesale orders |
-| **Client** (pharmacy, clinic, hospital, school) | The client themselves, or Sales | Landing page "Create an account" once the wholesale is set up; or **Buyers** → Create buyer account | My orders (client portal) |
-| **Manufacturer** | Sales | **Purchases** → **Manufacturers**: add the manufacturer with a login (or add a login later) | Its own purchase orders (manufacturer portal) |
+1. **Connect.** Find businesses in **Find businesses** and ask to connect; the other side accepts. Sellers set payment terms per customer: pay before delivery, on delivery, or on credit.
+2. **Inquiry.** The buyer opens a supplier from **Suppliers**, picks items from its list (names only) or types lines, and sends the inquiry.
+3. **Quotation.** The seller prices each line in **Orders** and sends the quote. Only that buyer sees it.
+4. **Purchase order.** The buyer accepts, which sends the purchase order.
+5. **Invoice and delivery note.** These come in the order the terms require: paid first, or delivered first. Dispatching takes the stock out of the seller's inventory (earliest expiry first).
+6. **Receiving.** The buyer confirms what arrived. Wholesalers and retailers then finish each line in Inventory (batch and expiry), which adds the stock.
+7. **Payment.** The seller records payments. The order closes once it is received and paid in full.
 
-The landing page sign-up only ever creates client accounts, which is why it asks for an organisation type. A wholesale account comes from `/setup` on an empty installation, and an installation belongs to one wholesale.
+Customers or suppliers who aren't on Parallax go on your private list (**Customers** / **Suppliers**). You can still make their documents and print or save them as PDF; you record their side's steps yourself.
+
+## Keeping businesses apart
+
+- **Sessions** carry the business. Every page and API route checks it, and another business's records answer "not found".
+- **Tenant data layer** (`lib/tenant.ts`): every query on business-owned tables is filtered to the signed-in business.
+- **Row-level security** in Postgres (`prisma/rls.sql`) applies the same rule inside the database. The app connects as a role that cannot bypass it. The Parallax team's screens use a separate role with no access to business tables at all.
+- **Field encryption** (AES-256-GCM, `lib/crypto.ts`): bank details, TPIN, licence numbers, private contact details, private order notes and patient details are encrypted in the database.
+
+## Demo logins
+
+From `npm run setup` (demo data). Every password is `Parallax2026!`.
+
+| Who | Email |
+| --- | --- |
+| Parallax team | team@parallax.local |
+| Manufacturer: Zambia Pharma Industries | zpi@parallax.local |
+| Manufacturer: Apex Generics | apex@parallax.local |
+| Wholesaler: Kilmer's Medical Wholesale | kilmers@parallax.local |
+| Wholesaler: Copperbelt Medical Supplies (payment due) | copperbelt@parallax.local |
+| Retailer: Lusaka Central Pharmacy | central@parallax.local |
+| Retailer: Kabwe Family Pharmacy (trial, connection pending) | kabwe@parallax.local |
+| Client: University Teaching Hospital | uth@parallax.local |
+| Client: Hope NGO Clinic | hope@parallax.local |
+
+Change or remove demo logins before exposing an installation to other users.
 
 ## Demo on a local network
 
-Run Parallax on this computer and let other computers on the same Wi-Fi or office network use it:
-
 ```bash
-npm run demo -- --reset
+npm run demo -- --seed
 ```
 
-The command prints an address such as `http://192.168.0.100:3000`. Open it on the other computers. The first person to open it sets up the wholesale (owner account, company, logo and bank details). That owner then adds Finance and Sales staff under **Staff**. Client organisations sign up from the landing page, or Sales creates them under **Buyers**.
-
-- Leave the window open during the demo; `Ctrl+C` stops it. Run `npm run demo` (without `--reset`) to carry on with the same data later.
-- `npm run demo -- --seed` starts with the sample stock, orders and demo logins instead of an empty installation.
-- If other computers can't connect, check:
-  - all the computers are on the same network (not a guest network that isolates devices);
-  - the computer's firewall allows incoming connections for Node;
-  - the address printed is the current one (it can change when you reconnect to Wi-Fi).
-- The demo runs over plain HTTP on a trusted network only. Don't expose it to the internet.
+This serves Parallax on `0.0.0.0:3000` from its own database (`parallax_demo`) and prints the address for other computers on the same network. Use `--reset` instead of `--seed` for an empty installation. The demo runs over plain HTTP: use it on a trusted network only.
 
 ## Tests
 
@@ -83,61 +105,11 @@ The command prints an address such as `http://192.168.0.100:3000`. Open it on th
 npm test -- --build
 ```
 
-This plays every account type's work end to end on throwaway databases, and checks each role's pages and permissions. Your own data in `prisma/dev.db` is not touched. Drop `--build` when the code hasn't changed since the last build.
+Each suite runs on its own throwaway Postgres database (`parallax_test_workflow`, `parallax_test_access`), so your data is not touched:
 
-## Sign-in accounts
+- **workflow** plays the whole network from empty: sign-ups, the Parallax team's work, connections, and orders along the chain with stock and payments;
+- **access** checks each account type's pages, that no business reaches another's records, the database-level locks, and that code only reads business tables through `lib/tenant.ts`.
 
-These are local demonstration accounts created by the seed script. Change or remove demo credentials before exposing an installation to other users.
+`npx tsx scripts/test/rls-check.ts` runs only the database-level checks against your own database.
 
-| Who | Email | Password |
-| --- | --- | --- |
-| Administrator | admin@pharmacore.local | Admin123! |
-| Finance | finance@pharmacore.local | Finance123! |
-| Sales | sales@pharmacore.local | Sales123! |
-| Manufacturer (MedLine) | medline@pharmacore.local | Maker123! |
-| Hospital buyer (UTH) | uth@pharmacore.local | Buyer123! |
-| Clinic buyer | clinic@pharmacore.local | Buyer123! |
-| Pharmacy buyer | partner@pharmacore.local | Buyer123! |
-
-## Wholesale trade documents
-
-Wholesale managers can prepare printable quotations, invoices, and delivery notes from an order. Buyers can view issued documents on their order in the portal.
-
-1. Sign in as the wholesale manager and open **Wholesale orders**, then select an order.
-2. Send or update a quotation. Set a unit price for every order line, tax rate, ready date, quotation expiry date, and buyer message. Optional terms are included on the document.
-3. The buyer signs in to the portal, opens the order, reviews the quotation, and accepts it. The invoice action is available after acceptance.
-4. Issue or update the invoice with its due date, amount already paid, and payment terms.
-5. Once the order is being prepared, issue or update the delivery note. Enter quantities delivered, delivery method, driver/vehicle, dispatch location, line remarks, and any delivery exceptions.
-6. Open each issued document and select **Print or save PDF**.
-
-The order page includes document links for wholesale staff. Buyers see links to their quotation, invoice, and delivery note as each document is issued. Buyers can only access orders belonging to their institution.
-
-### Pharmacy details, bank information, and logo
-
-Before printing quotations or invoices, a wholesale manager should open **Pharmacy details** and save the correct pharmacy trading details, TPIN, bank name, account name, and account number. Branch and SWIFT/sort code are optional. These values are printed from the pharmacy record; they are not entered on an individual order.
-
-The same page allows an authorized user to upload a PNG, JPG, or WebP logo up to 1.5 MB. The uploaded image is used on trade documents. If no logo is uploaded, the document displays a logo placeholder. Uploaded logo files are stored under `data/branding` and are excluded from Git.
-
-Delivery notes include a receiver acknowledgement and signature line to be completed on paper.
-
-### Sales-counter invoice
-
-Completing a sales-counter transaction creates its invoice number and provides a **Print invoice** link. Saved sales can also be opened from **Sales** by selecting the invoice number. The sales invoice layout includes item lines, tax, discounts, payment method, total paid, and balance. The counter invoice uses the sale date as its due date and records the sale total as paid.
-
-## Other areas
-
-- **Home** — sales, low stock, and items near expiry.
-- **Sales counter** — sell items and reduce stock.
-- **Inventory** — products, batches, and expiry.
-- **Wholesale orders** — manage hospital, clinic, and pharmacy requests.
-- **Buyers** — manage organization accounts.
-- **Search** — find products, patients, sales, and orders.
-
-## Validation
-
-```powershell
-npm.cmd run build
-npx.cmd tsc --noEmit
-```
-
-For a guided operator walkthrough, see [New features walkthrough](docs/NEW-FEATURES-WALKTHROUGH.docx).
+Drop `--build` when the code hasn't changed since the last build. To look around the installation the workflow test built, run `npx tsx scripts/serve-test.ts` (port 3200).

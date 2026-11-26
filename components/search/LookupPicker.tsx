@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { useLookup } from "./useLookup";
+import { useLookup, type LookupKind } from "./useLookup";
 
 export type Picked = { id: string; name: string; detail?: string };
 
@@ -21,7 +21,7 @@ export function LookupPicker<T extends Picked>({
   id,
   describe,
 }: {
-  kind: "products" | "patients";
+  kind: LookupKind;
   value: T | null;
   onChange: (value: T | null) => void;
   params?: Record<string, string>;

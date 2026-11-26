@@ -1,164 +1,79 @@
 import { NextResponse } from "next/server";
-import { canSell, isBuyer, isManufacturer, isStaff, requireUser } from "@/lib/auth";
-import { PO_SUPPLIER_LABEL } from "@/lib/purchasing";
-import { getPharmacy } from "@/lib/pharmacy";
-import { db } from "@/lib/db";
-import { STATUS_LABEL } from "@/lib/wholesale";
+import { apiTenant } from "@/lib/tenant";
+import { can } from "@/lib/capabilities";
+import { statusLabel } from "@/lib/trade";
 
+/** Header search over the signed-in business's own records only. */
 export async function GET(request: Request) {
-  const user = await requireUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await apiTenant(undefined, { write: false });
+  if (!auth.ok) return auth.response;
+  const { t } = auth;
+  const { db, org } = t;
 
-  const needle = (new URL(request.url).searchParams.get("q") ?? "").trim().toLowerCase().slice(0, 100);
-  if (needle.length < 2) return NextResponse.json({ hits: [] });
-
+  const q = (new URL(request.url).searchParams.get("q") ?? "").trim().slice(0, 100);
+  if (q.length < 2) return NextResponse.json({ hits: [] });
+  const text = { contains: q, mode: "insensitive" as const };
   const hits: { href: string; title: string; detail: string; group: string }[] = [];
 
-  const q = needle;
-  if (isBuyer(user.role)) {
-    // Order numbers and item names are matched in the database, newest first.
-    const orders = await db.consignment.findMany({
-      where: {
-        institutionId: user.institutionId ?? "__none__",
-        OR: [
-          { reference: { contains: q } },
-          { status: { in: statusesMatching(q) } },
-          { items: { some: { product: { name: { contains: q } } } } },
-        ],
-      },
-      select: { id: true, reference: true, status: true },
-      orderBy: { createdAt: "desc" },
-      take: 8,
-    });
-    // The wholesaler this installation belongs to: its contact details, and a way to order.
-    const wholesaler = await getPharmacy();
-    if (wholesaler && [wholesaler.name, wholesaler.phone, wholesaler.email].some((v) => (v ?? "").toLowerCase().includes(q))) {
-      hits.push({
-        href: "/portal/new",
-        title: wholesaler.name,
-        detail: [wholesaler.phone, wholesaler.email].filter(Boolean).join(" · ") || "Your wholesaler",
-        group: "Wholesaler",
-      });
-    }
-    for (const order of orders) {
-      hits.push({
-        href: `/portal/orders/${order.id}`,
-        title: order.reference,
-        detail: STATUS_LABEL[order.status] ?? order.status,
-        group: "Orders",
-      });
-    }
-    return NextResponse.json({ hits });
-  }
-
-  if (isManufacturer(user.role)) {
-    // A manufacturer finds only its own purchase orders.
-    const pos = await db.purchaseOrder.findMany({
-      where: {
-        supplierId: user.supplierId ?? "__none__",
-        OR: [
-          { reference: { contains: q } },
-          { invoiceNo: { contains: q } },
-          { deliveryNoteNo: { contains: q } },
-          { items: { some: { product: { name: { contains: q } } } } },
-        ],
-      },
-      select: { id: true, reference: true, status: true },
-      orderBy: { createdAt: "desc" },
-      take: 8,
-    });
-    for (const po of pos) {
-      hits.push({
-        href: `/supplier/orders/${po.id}`,
-        title: po.reference,
-        detail: PO_SUPPLIER_LABEL[po.status] ?? po.status,
-        group: "Orders",
-      });
-    }
-    return NextResponse.json({ hits });
-  }
-  if (!isStaff(user.role)) return NextResponse.json({ hits: [] });
-
-  // Each group is searched in the database, so matches are found however large the tables get.
-  const [products, patients, sales, orders, purchases] = await Promise.all([
-    db.product.findMany({
-      where: {
-        active: true,
-        OR: [
-          { name: { contains: q } },
-          { sku: { contains: q } },
-          { barcode: { contains: q } },
-          { genericName: { contains: q } },
-        ],
-      },
-      select: { id: true, name: true, sku: true },
-      orderBy: { name: "asc" },
-      take: 5,
-    }),
-    // Patients are only for roles that serve them (Finance can't open patient records).
-    !canSell(user.role) ? Promise.resolve([]) : db.patient.findMany({
-      where: {
-        OR: [
-          { firstName: { contains: q } },
-          { lastName: { contains: q } },
-          { phone: { contains: q } },
-          { insurance: { contains: q } },
-        ],
-      },
-      select: { firstName: true, lastName: true, phone: true },
-      orderBy: { lastName: "asc" },
-      take: 5,
-    }),
-    db.sale.findMany({
-      where: {
-        OR: [
-          { invoiceNo: { contains: q } },
-          { cashier: { name: { contains: q } } },
-          { patient: { firstName: { contains: q } } },
-          { patient: { lastName: { contains: q } } },
-        ],
-      },
-      select: { invoiceNo: true, patient: { select: { firstName: true, lastName: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 4,
-    }),
-    isStaff(user.role)
-      ? db.consignment.findMany({
-          where: {
-            OR: [
-              { reference: { contains: q } },
-              { invoiceNo: { contains: q } },
-              { institution: { name: { contains: q } } },
-              { status: { in: statusesMatching(q) } },
-            ],
-          },
-          select: { id: true, reference: true, institution: { select: { name: true } } },
+  const [products, patients, sales, orders] = await Promise.all([
+    can(org.kind, "catalog")
+      ? db.product.findMany({
+          where: { active: true, OR: [{ name: text }, { sku: text }, { barcode: text }, { genericName: text }] },
+          select: { id: true, name: true, sku: true },
+          orderBy: { name: "asc" },
+          take: 5,
+        })
+      : Promise.resolve([]),
+    can(org.kind, "counter")
+      ? db.patient.findMany({
+          where: { OR: [{ firstName: text }, { lastName: text }] },
+          select: { firstName: true, lastName: true },
+          orderBy: { lastName: "asc" },
+          take: 5,
+        })
+      : Promise.resolve([]),
+    can(org.kind, "counter")
+      ? db.sale.findMany({
+          where: { OR: [{ invoiceNo: text }, { patient: { lastName: text } }] },
+          select: { invoiceNo: true, patient: { select: { firstName: true, lastName: true } } },
           orderBy: { createdAt: "desc" },
           take: 4,
         })
       : Promise.resolve([]),
-    db.purchaseOrder.findMany({
+    db.tradeOrder.findMany({
       where: {
-        OR: [
-          { reference: { contains: q } },
-          { invoiceNo: { contains: q } },
-          { supplier: { name: { contains: q } } },
-        ],
+        OR: [{ sellerOrgId: org.id }, { buyerOrgId: org.id }],
+        AND: {
+          OR: [
+            { inquiryNo: text },
+            { poNumber: text },
+            { quoteNo: text },
+            { invoiceNo: text },
+            { deliveryNoteNo: text },
+            { buyerName: text },
+            { sellerName: text },
+          ],
+        },
       },
-      select: { id: true, reference: true, supplier: { select: { name: true } } },
+      select: { id: true, inquiryNo: true, status: true, sellerOrgId: true, buyerName: true, sellerName: true },
       orderBy: { createdAt: "desc" },
-      take: 4,
+      take: 6,
     }),
   ]);
 
   for (const product of products) {
-    hits.push({ href: `/inventory/${product.id}`, title: product.name, detail: product.sku, group: "Inventory" });
+    hits.push({
+      href: can(org.kind, "inventory") ? `/inventory/${product.id}` : `/items?q=${encodeURIComponent(product.sku)}`,
+      title: product.name,
+      detail: product.sku,
+      group: "Items",
+    });
   }
   for (const patient of patients) {
     hits.push({
       href: `/patients?q=${encodeURIComponent(patient.lastName)}`,
       title: `${patient.lastName}, ${patient.firstName}`,
-      detail: patient.phone ?? "Patient record",
+      detail: "Patient record",
       group: "Patients",
     });
   }
@@ -167,23 +82,17 @@ export async function GET(request: Request) {
       href: `/sales?q=${encodeURIComponent(sale.invoiceNo)}`,
       title: sale.invoiceNo,
       detail: sale.patient ? `${sale.patient.firstName} ${sale.patient.lastName}` : "Walk-in",
-      group: "Sales",
+      group: "Counter sales",
     });
   }
   for (const order of orders) {
-    hits.push({ href: `/wholesale/${order.id}`, title: order.reference, detail: order.institution.name, group: "Wholesale" });
+    const selling = order.sellerOrgId === org.id;
+    hits.push({
+      href: selling ? `/orders/${order.id}` : `/purchases/${order.id}`,
+      title: order.inquiryNo,
+      detail: `${selling ? order.buyerName : order.sellerName} · ${statusLabel(order.status, selling ? "seller" : "buyer")}`,
+      group: selling ? "Orders" : "Purchases",
+    });
   }
-
-  for (const po of purchases) {
-    hits.push({ href: `/purchases/${po.id}`, title: po.reference, detail: po.supplier.name, group: "Purchases" });
-  }
-
   return NextResponse.json({ hits: hits.slice(0, 12) });
-}
-
-/** Status codes whose plain-English label contains the search text ("ready" → READY). */
-function statusesMatching(q: string) {
-  return Object.entries(STATUS_LABEL)
-    .filter(([code, label]) => code.toLowerCase().includes(q) || label.toLowerCase().includes(q))
-    .map(([code]) => code);
 }

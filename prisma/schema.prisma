@@ -2,120 +2,225 @@ generator client {
   provider = "prisma-client-js"
 }
 
+/// The app connects as a non-owner role (DATABASE_URL) so row-level security applies.
+/// Schema changes and prisma/rls.sql run as the owner (DIRECT_URL).
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Platform tables: no tenant. Readable by the Parallax team's connection role.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A business on Parallax. kind: MANUFACTURER | WHOLESALER | RETAILER | CLIENT (lib/capabilities.ts).
+model Organization {
+  id                  String    @id @default(cuid())
+  kind                String
+  name                String
+  town                String?
+  address             String?
+  phone               String?
+  email               String?
+  website             String?
+  logoPath            String?
+  /// Shown in the directory so other businesses can find it and ask to connect.
+  listed              Boolean   @default(true)
+  /// PREPAY | ON_DELIVERY | CREDIT (lib/trade.ts)
+  defaultPaymentTerms String    @default("ON_DELIVERY")
+  creditDays          Int       @default(30)
+  currency            String    @default("ZMW")
+  /// ACTIVE | SUSPENDED | DELETED
+  status              String    @default("ACTIVE")
+  deletedAt           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  // Encrypted at rest (lib/crypto.ts)
+  licenceNo           String?
+  tpin                String?
+  bankName            String?
+  accountName         String?
+  accountNumber       String?
+  bankBranch          String?
+  swiftCode           String?
+
+  users        User[]
+  subscription Subscription?
+
+  @@index([kind, status, name])
+  @@index([status, createdAt])
+}
+
+/// role: ADMIN (Parallax team, orgId null) or the organisation's kind.
 model User {
-  id             String          @id @default(cuid())
-  email          String          @unique
-  name           String
-  passwordHash   String
-  role           String          @default("SALES")
-  active         Boolean         @default(true)
-  lastLoginAt    DateTime?
-  institutionId  String?
-  institution    Institution?    @relation(fields: [institutionId], references: [id])
-  /// MANUFACTURER accounts belong to one Supplier (one account per manufacturer).
-  supplierId     String?
-  supplier       Supplier?       @relation(fields: [supplierId], references: [id])
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  sales          Sale[]
-  stockTakes     StockTake[]
-  auditLogs      AuditLog[]
-  prescriptions  Prescription[]
-  purchaseOrders PurchaseOrder[]
-  consignments   Consignment[]   @relation("RequestedBy")
-  quotedOrders   Consignment[]   @relation("QuotedBy")
+  id                 String        @id @default(cuid())
+  email              String        @unique
+  name               String
+  passwordHash       String
+  role               String
+  orgId              String?
+  org                Organization? @relation(fields: [orgId], references: [id])
+  active             Boolean       @default(true)
+  mustChangePassword Boolean       @default(false)
+  /// Bumped on password reset, deactivation or "sign out everywhere": older session cookies stop working.
+  sessionVersion     Int           @default(0)
+  lastLoginAt        DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([orgId])
+  @@index([role, createdAt])
 }
 
-model Patient {
-  id            String         @id @default(cuid())
-  firstName     String
-  lastName      String
-  dateOfBirth   DateTime?
-  gender        String?
-  phone         String?
-  email         String?
-  address       String?
-  allergies     String?
-  insurance     String?
+/// One per paying organisation (not clients). Status is computed in lib/subscription.ts.
+model Subscription {
+  id          String                @id @default(cuid())
+  orgId       String                @unique
+  org         Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  plan        String                @default("STANDARD")
+  trialEndsAt DateTime?
+  periodEnd   DateTime
+  notes       String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  payments    SubscriptionPayment[]
+
+  @@index([periodEnd])
+}
+
+model SubscriptionPayment {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  amount         Float
+  paidOn         DateTime
+  periodStart    DateTime
+  periodEnd      DateTime
+  reference      String?
+  recordedById   String?
+  createdAt      DateTime     @default(now())
+
+  @@index([subscriptionId, paidOn])
+}
+
+/// A message from the Parallax team. audience: ALL | KIND (kind set) | ORG (orgId set).
+model Announcement {
+  id          String             @id @default(cuid())
+  audience    String
+  kind        String?
+  orgId       String?
+  title       String
+  body        String
+  createdById String?
+  createdAt   DateTime           @default(now())
+  reads       AnnouncementRead[]
+
+  @@index([createdAt])
+  @@index([audience, kind])
+  @@index([orgId])
+}
+
+model AnnouncementRead {
+  id             String       @id @default(cuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  readAt         DateTime     @default(now())
+
+  @@unique([announcementId, userId])
+  @@index([userId])
+}
+
+/// Every action by the Parallax team.
+model PlatformAudit {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  orgId     String?
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([orgId, createdAt])
+}
+
+/// "Request a demo" submissions from the public landing page.
+model DemoRequest {
+  id            String    @id @default(cuid())
+  name          String
+  company       String
+  phone         String
+  email         String
   notes         String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  prescriptions Prescription[]
-  sales         Sale[]
+  createdAt     DateTime  @default(now())
+  contactedAt   DateTime?
+  contactedById String?
 
-  @@index([lastName, firstName])
+  @@index([createdAt])
 }
 
-model Supplier {
-  id             String          @id @default(cuid())
-  name           String
-  contact        String?
-  phone          String?
-  email          String?
-  address        String?
-  createdAt      DateTime        @default(now())
-  products       Product[]
-  purchaseOrders PurchaseOrder[]
-  users          User[]
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Tenant tables: every row carries orgId; row-level security limits each business
+// to its own rows (prisma/rls.sql). Access them only through lib/tenant.ts.
+// ─────────────────────────────────────────────────────────────────────────────
 
 model Category {
   id       String    @id @default(cuid())
-  name     String    @unique
+  orgId    String
+  name     String
   products Product[]
+
+  @@unique([orgId, name])
 }
 
 model Product {
-  id                String              @id @default(cuid())
-  sku               String              @unique
-  barcode           String?
-  name              String
-  genericName       String?
-  form              String?
-  strength          String?
-  manufacturer      String?
-  categoryId        String?
-  category          Category?           @relation(fields: [categoryId], references: [id])
-  supplierId        String?
-  supplier          Supplier?           @relation(fields: [supplierId], references: [id])
-  unit              String              @default("pack")
-  sellingPrice      Float
-  costPrice         Float
-  reorderLevel      Int                 @default(20)
-  reorderQty        Int                 @default(50)
-  requiresRx        Boolean             @default(false)
-  controlled        Boolean             @default(false)
-  taxRate           Float               @default(0)
-  kind              String              @default("MEDICINE")
-  wholesalePrice    Float?
-  categoryNo        String?
-  active            Boolean             @default(true)
-  deletedAt         DateTime?
-  deleteReason      String?
-  deletedByName     String?
-  purgedAt          DateTime?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  id             String    @id @default(cuid())
+  orgId          String
+  sku            String
+  barcode        String?
+  name           String
+  genericName    String?
+  form           String?
+  strength       String?
+  manufacturer   String?
+  categoryId     String?
+  category       Category? @relation(fields: [categoryId], references: [id])
+  unit           String    @default("pack")
+  sellingPrice   Float     @default(0)
+  costPrice      Float     @default(0)
+  reorderLevel   Int       @default(20)
+  reorderQty     Int       @default(50)
+  requiresRx     Boolean   @default(false)
+  controlled     Boolean   @default(false)
+  taxRate        Float     @default(0)
+  kind           String    @default("MEDICINE")
+  categoryNo     String?
+  /// In the item list connected buyers can see (names only, never prices or stock).
+  offered        Boolean   @default(true)
+  active         Boolean   @default(true)
+  deletedAt      DateTime?
+  deleteReason   String?
+  deletedByName  String?
+  purgedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
   batches           Batch[]
   saleItems         SaleItem[]
-  purchaseItems     PurchaseOrderItem[]
   stockTakeItems    StockTakeItem[]
   prescriptionItems PrescriptionItem[]
-  consignmentItems  ConsignmentItem[]
   intakes           StockIntake[]
 
-  @@index([active, sku])
-  @@index([active, name])
-  @@index([deletedAt])
+  @@unique([orgId, sku])
+  @@index([orgId, active, name])
+  @@index([orgId, deletedAt])
+  @@index([orgId, active, offered, name])
 }
 
 model Batch {
   id         String   @id @default(cuid())
+  orgId      String
   productId  String
   product    Product  @relation(fields: [productId], references: [id])
   lotNumber  String
@@ -124,158 +229,58 @@ model Batch {
   receivedAt DateTime @default(now())
 
   @@index([productId, quantity])
-  @@index([quantity, expiryDate])
+  @@index([orgId, quantity, expiryDate])
 }
 
-model PurchaseOrder {
-  id             String              @id @default(cuid())
-  reference      String              @unique
-  supplierId     String
-  supplier       Supplier            @relation(fields: [supplierId], references: [id])
-  createdById    String
-  createdBy      User                @relation(fields: [createdById], references: [id])
-  /// See lib/purchasing.ts: SENT → QUOTED → ACCEPTED → DISPATCHED → RECEIVED, or DECLINED / CANCELLED.
-  status         String              @default("SENT")
-  notes          String?
-  createdAt      DateTime            @default(now())
-  receivedAt     DateTime?
-  items          PurchaseOrderItem[]
-  deliveryNoteNo String?
-  intakes        StockIntake[]
-  events         PurchaseOrderEvent[]
-  // Manufacturer's quotation
-  quotedAmount    Float?
-  taxRate         Float              @default(0)
-  readyOn         DateTime?
-  validUntil      DateTime?
-  quotedAt        DateTime?
-  supplierMessage String?
-  terms           String?
-  // Manufacturer's invoice; finance records what has been paid
-  invoiceNo       String?
-  invoicedAt      DateTime?
-  dueOn           DateTime?
-  amountPaid      Float              @default(0)
-  // Manufacturer's dispatch
-  dispatchedAt    DateTime?
-  deliveryMethod  String?
-
-  @@index([createdAt])
-  @@index([supplierId, createdAt])
-  @@index([status, createdAt])
-  @@index([dueOn])
-}
-
-model PurchaseOrderEvent {
-  id        String        @id @default(cuid())
-  orderId   String
-  order     PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  status    String
-  message   String?
-  actorName String?
-  createdAt DateTime      @default(now())
-
-  @@index([orderId, createdAt])
-}
-
-model PurchaseOrderItem {
-  id        String        @id @default(cuid())
-  orderId   String
-  order     PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product       @relation(fields: [productId], references: [id])
-  quantity  Int
-  /// Expected cost when ordered; replaced by the manufacturer's quoted price.
-  unitCost  Float         @default(0)
-  /// Quantity on the manufacturer's delivery note.
-  qtyDispatched Int?
-
-  @@index([orderId])
-  @@index([productId])
-}
-
-model Prescription {
-  id           String             @id @default(cuid())
-  rxNumber     String             @unique
-  patientId    String
-  patient      Patient            @relation(fields: [patientId], references: [id])
-  pharmacistId String?
-  pharmacist   User?              @relation(fields: [pharmacistId], references: [id])
-  prescriber   String
-  clinic       String?
-  status       String             @default("PENDING")
-  notes        String?
-  createdAt    DateTime           @default(now())
-  dispensedAt  DateTime?
-  items        PrescriptionItem[]
-
-  @@index([status, createdAt])
-  @@index([patientId])
-}
-
-model PrescriptionItem {
-  id             String       @id @default(cuid())
-  prescriptionId String
-  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
-  productId      String
-  product        Product      @relation(fields: [productId], references: [id])
+/// A delivered line waiting in Inventory for its expiry and other details. Stock is only
+/// added once the details are entered (status DONE).
+model StockIntake {
+  id             String      @id @default(cuid())
+  orgId          String
+  tradeOrderId   String?
+  tradeOrder     TradeOrder? @relation(fields: [tradeOrderId], references: [id])
+  /// Null until matched to (or created as) one of this business's items.
+  productId      String?
+  product        Product?    @relation(fields: [productId], references: [id])
+  /// The supplier's description of the line, for matching.
+  itemName       String
+  itemStrength   String?
+  itemForm       String?
+  itemUnit       String?
+  sellerProductId String?
+  deliveryNoteNo String
+  supplierName   String?
   quantity       Int
-  dosage         String?
-  instructions   String?
+  unitCost       Float       @default(0)
+  status         String      @default("PENDING")
+  lotNumber      String?
+  expiryDate     DateTime?
+  createdAt      DateTime    @default(now())
+  completedAt    DateTime?
 
-  @@index([prescriptionId])
-  @@index([productId])
-}
-
-model Sale {
-  id        String     @id @default(cuid())
-  invoiceNo String     @unique
-  cashierId String
-  cashier   User       @relation(fields: [cashierId], references: [id])
-  patientId String?
-  patient   Patient?   @relation(fields: [patientId], references: [id])
-  subtotal  Float
-  tax       Float
-  discount  Float      @default(0)
-  total     Float
-  payment   String     @default("CASH")
-  createdAt DateTime   @default(now())
-  items     SaleItem[]
-
-  @@index([createdAt])
-  @@index([patientId])
-}
-
-model SaleItem {
-  id        String  @id @default(cuid())
-  saleId    String
-  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-  quantity  Int
-  unitPrice Float
-  total     Float
-
-  @@index([saleId])
+  @@index([orgId, status, createdAt])
   @@index([productId])
 }
 
 model StockTake {
   id          String          @id @default(cuid())
-  reference   String          @unique
+  orgId       String
+  reference   String
   userId      String
-  user        User            @relation(fields: [userId], references: [id])
+  userName    String
   status      String          @default("IN_PROGRESS")
   notes       String?
   startedAt   DateTime        @default(now())
   completedAt DateTime?
   items       StockTakeItem[]
 
-  @@index([startedAt])
+  @@unique([orgId, reference])
+  @@index([orgId, startedAt])
 }
 
 model StockTakeItem {
   id          String    @id @default(cuid())
+  orgId       String
   stockTakeId String
   stockTake   StockTake @relation(fields: [stockTakeId], references: [id], onDelete: Cascade)
   productId   String
@@ -289,152 +294,302 @@ model StockTakeItem {
   @@index([productId])
 }
 
+// Retail counter (retailers)
+
+model Patient {
+  id            String         @id @default(cuid())
+  orgId         String
+  firstName     String
+  lastName      String
+  gender        String?
+  // Encrypted at rest
+  dateOfBirth   String?
+  phone         String?
+  email         String?
+  address       String?
+  allergies     String?
+  insurance     String?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  prescriptions Prescription[]
+  sales         Sale[]
+
+  @@index([orgId, lastName, firstName])
+}
+
+model Prescription {
+  id             String             @id @default(cuid())
+  orgId          String
+  rxNumber       String
+  patientId      String
+  patient        Patient            @relation(fields: [patientId], references: [id])
+  dispensedById  String?
+  dispensedBy    String?
+  prescriber     String
+  clinic         String?
+  status         String             @default("PENDING")
+  notes          String?
+  createdAt      DateTime           @default(now())
+  dispensedAt    DateTime?
+  items          PrescriptionItem[]
+
+  @@unique([orgId, rxNumber])
+  @@index([orgId, status, createdAt])
+  @@index([patientId])
+}
+
+model PrescriptionItem {
+  id             String       @id @default(cuid())
+  orgId          String
+  prescriptionId String
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product      @relation(fields: [productId], references: [id])
+  quantity       Int
+  dosage         String?
+  instructions   String?
+
+  @@index([prescriptionId])
+  @@index([productId])
+}
+
+model Sale {
+  id         String     @id @default(cuid())
+  orgId      String
+  invoiceNo  String
+  cashierId  String
+  cashierName String
+  patientId  String?
+  patient    Patient?   @relation(fields: [patientId], references: [id])
+  subtotal   Float
+  tax        Float
+  discount   Float      @default(0)
+  total      Float
+  payment    String     @default("CASH")
+  createdAt  DateTime   @default(now())
+  items      SaleItem[]
+
+  @@unique([orgId, invoiceNo])
+  @@index([orgId, createdAt])
+  @@index([patientId])
+}
+
+model SaleItem {
+  id        String  @id @default(cuid())
+  orgId     String
+  saleId    String
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Float
+  total     Float
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+// Every business
+
+/// A business's own activity log. userName is kept so entries survive a deleted login.
 model AuditLog {
   id        String   @id @default(cuid())
+  orgId     String
   userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
+  userName  String?
   action    String
   entity    String
   entityId  String?
   details   String?
   createdAt DateTime @default(now())
 
-  @@index([createdAt])
+  @@index([orgId, createdAt])
 }
 
-model Pharmacy {
-  id            String  @id @default("main")
-  name          String
-  license       String?
-  phone         String?
-  email         String?
-  address       String?
-  website       String?
-  tpin          String?
-  currency      String  @default("ZMW")
-  bankName      String?
-  accountName   String?
-  accountNumber String?
-  bankBranch    String?
-  swiftCode     String?
-  logoPath      String?
+/// A business's PRIVATE list of counterparties for documents (customers or suppliers that may
+/// not be on Parallax). linkedOrgId is set when the contact is a business on Parallax.
+model Contact {
+  id          String   @id @default(cuid())
+  orgId       String
+  /// SUPPLIER | CUSTOMER
+  role        String
+  /// MANUFACTURER | WHOLESALER | RETAILER | CLIENT
+  kind        String
+  name        String
+  address     String?
+  town        String?
+  linkedOrgId String?
+  // Encrypted at rest
+  phone       String?
+  email       String?
+  tpin        String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orgId, role, name])
 }
 
-model Institution {
-  id        String        @id @default(cuid())
-  name      String
-  kind      String
-  license   String?
-  contact   String?
-  phone     String?
-  email     String?
-  address   String?
-  active    Boolean       @default(true)
-  createdAt DateTime      @default(now())
-  users     User[]
-  orders    Consignment[]
+/// Business events for one organisation (the notification bell).
+model Notification {
+  id        String    @id @default(cuid())
+  orgId     String
+  type      String
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([orgId, readAt, createdAt])
 }
 
-model Consignment {
-  id              String             @id @default(cuid())
-  reference       String             @unique
-  institutionId   String
-  institution     Institution        @relation(fields: [institutionId], references: [id])
-  requestedById   String
-  requestedBy     User               @relation("RequestedBy", fields: [requestedById], references: [id])
-  quotedById      String?
-  quotedBy        User?              @relation("QuotedBy", fields: [quotedById], references: [id])
-  status          String             @default("REQUESTED")
-  notes           String?
-  adminMessage    String?
-  quotedAmount    Float?
-  taxRate         Float              @default(0)
-  readyOn         DateTime?
-  validUntil      DateTime?
-  dueOn           DateTime?
-  amountPaid      Float              @default(0)
-  invoiceNo       String?            @unique
-  deliveryNoteNo  String?            @unique
-  terms           String?
-  deliveryMethod  String?
-  vehicleDriver   String?
-  dispatchFrom    String?
-  deliveryNotes   String?
-  invoicedAt      DateTime?
-  deliveryAddress String?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  quotedAt        DateTime?
-  items           ConsignmentItem[]
-  events          ConsignmentEvent[]
-
-  @@index([institutionId, createdAt])
-  @@index([status, createdAt])
-  @@index([createdAt])
-  @@index([dueOn])
-}
-
-model ConsignmentItem {
-  id            String      @id @default(cuid())
-  consignmentId String
-  consignment   Consignment @relation(fields: [consignmentId], references: [id], onDelete: Cascade)
-  productId     String
-  product       Product     @relation(fields: [productId], references: [id])
-  quantity      Int
-  unitPrice     Float?
-  qtyDelivered  Int?
-  remarks       String?
-  notes         String?
-
-  @@index([consignmentId])
-  @@index([productId])
-}
-
-model ConsignmentEvent {
-  id            String      @id @default(cuid())
-  consignmentId String
-  consignment   Consignment @relation(fields: [consignmentId], references: [id], onDelete: Cascade)
-  status        String
-  message       String?
-  actorName     String?
-  createdAt     DateTime    @default(now())
-
-  @@index([consignmentId])
-}
-
-/// A delivered supplier line waiting in Inventory for its expiry, price and
-/// other details. Stock is only added once the details are entered (status DONE).
-model StockIntake {
-  id              String         @id @default(cuid())
-  purchaseOrderId String?
-  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+/// Which of the buyer's items a supplier's item becomes, so later deliveries match automatically.
+model ProductLink {
+  id              String   @id @default(cuid())
+  orgId           String
+  sellerOrgId     String
+  sellerProductId String
   productId       String
-  product         Product        @relation(fields: [productId], references: [id])
-  deliveryNoteNo  String
-  supplierName    String?
-  quantity        Int
-  unitCost        Float          @default(0)
-  status          String         @default("PENDING")
-  lotNumber       String?
-  expiryDate      DateTime?
-  createdAt       DateTime       @default(now())
-  completedAt     DateTime?
+  createdAt       DateTime @default(now())
 
-  @@index([status, createdAt])
-  @@index([productId])
+  @@unique([orgId, sellerProductId])
 }
 
-/// "Request a demo" submissions from the public landing page. Administrators see them under Demo requests.
-model DemoRequest {
-  id            String    @id @default(cuid())
-  name          String
-  company       String
-  phone         String
-  email         String
-  notes         String?
-  createdAt     DateTime  @default(now())
-  contactedAt   DateTime?
-  contactedById String?
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared trade tables: visible to exactly the two businesses involved.
+// ─────────────────────────────────────────────────────────────────────────────
 
-  @@index([createdAt])
+/// A trading connection. Either side asks; the other accepts.
+model TradeLink {
+  id               String    @id @default(cuid())
+  sellerOrgId      String
+  buyerOrgId       String
+  /// PENDING | ACTIVE | DECLINED | ENDED
+  status           String    @default("PENDING")
+  requestedByOrgId String
+  /// Overrides the seller's default for this buyer.
+  paymentTerms     String?
+  creditDays       Int?
+  createdAt        DateTime  @default(now())
+  respondedAt      DateTime?
+
+  @@unique([sellerOrgId, buyerOrgId])
+  @@index([buyerOrgId, status])
+  @@index([sellerOrgId, status])
+}
+
+/// One order between a seller and a buyer, from inquiry to closed. One side may be off Parallax
+/// (channel OFFLINE): then that side is a Contact of the business that created the order.
+model TradeOrder {
+  id               String   @id @default(cuid())
+  sellerOrgId      String?
+  buyerOrgId       String?
+  sellerContactId  String?
+  buyerContactId   String?
+  createdByOrgId   String
+  /// ONLINE | OFFLINE
+  channel          String   @default("ONLINE")
+  sellerName       String
+  buyerName        String
+  /// See lib/trade.ts
+  status           String   @default("INQUIRY")
+  paymentTerms     String   @default("ON_DELIVERY")
+  creditDays       Int      @default(30)
+
+  inquiryNo        String
+  quoteNo          String?
+  poNumber         String?
+  invoiceNo        String?
+  deliveryNoteNo   String?
+
+  buyerMessage     String?
+  deliveryAddress  String?
+  // Quotation
+  quotedAmount     Float?
+  taxRate          Float    @default(0)
+  readyOn          DateTime?
+  validUntil       DateTime?
+  terms            String?
+  sellerMessage    String?
+  // Invoice
+  dueOn            DateTime?
+  amountPaid       Float    @default(0)
+  // Dispatch
+  deliveryMethod   String?
+  vehicleDriver    String?
+  dispatchFrom     String?
+  deliveryNotes    String?
+  // Private to each side (encrypted)
+  sellerNotes      String?
+  buyerNotes       String?
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  quotedAt         DateTime?
+  orderedAt        DateTime?
+  invoicedAt       DateTime?
+  dispatchedAt     DateTime?
+  receivedAt       DateTime?
+  closedAt         DateTime?
+
+  items    TradeOrderItem[]
+  events   TradeOrderEvent[]
+  payments TradePayment[]
+  intakes  StockIntake[]
+
+  @@unique([buyerOrgId, inquiryNo])
+  @@index([sellerOrgId, status, createdAt])
+  @@index([buyerOrgId, status, createdAt])
+  @@index([sellerOrgId, dueOn])
+  @@index([buyerOrgId, dueOn])
+}
+
+model TradeOrderItem {
+  id              String     @id @default(cuid())
+  orderId         String
+  order           TradeOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  name            String
+  strength        String?
+  form            String?
+  unit            String?
+  quantity        Int
+  /// The seller's item (seller only).
+  sellerProductId String?
+  /// The buyer's item (buyer only).
+  buyerProductId  String?
+  unitPrice       Float?
+  qtyDispatched   Int?
+  qtyReceived     Int?
+  remarks         String?
+
+  @@index([orderId])
+}
+
+model TradeOrderEvent {
+  id         String     @id @default(cuid())
+  orderId    String
+  order      TradeOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status     String
+  message    String?
+  actorOrgId String?
+  actorName  String?
+  createdAt  DateTime   @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model TradePayment {
+  id         String     @id @default(cuid())
+  orderId    String
+  order      TradeOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount     Float
+  method     String
+  paidOn     DateTime
+  reference  String?
+  recordedBy String?
+  createdAt  DateTime   @default(now())
+
+  @@index([orderId])
 }

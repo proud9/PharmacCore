@@ -1,6 +1,6 @@
-import { plainStatus } from "@/lib/wholesale";
+import { pageTenant } from "@/lib/tenant";
+import { plainStatus } from "@/lib/trade";
 import { format } from "date-fns";
-import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { ListSearch } from "@/components/search/ListSearch";
 import { Pagination } from "@/components/Pagination";
@@ -22,30 +22,31 @@ const ENTITY_LABEL: Record<string, string> = {
 function actionLabel(action: string) {
   const words = action
     .toLowerCase()
-    .replace(/consignment/g, "order")
+    .replace(/trade_order/g, "order")
     .replace(/\brx\b/g, "prescription")
     .replace(/_/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 export default async function AuditPage({ searchParams }: { searchParams: Promise<ListParams> }) {
+  const t = await pageTenant();
+  const { db } = t;
   const params = await searchParams;
   const { page, take, skip, pageSize } = paging(params);
   const q = searchText(params);
   const where: Prisma.AuditLogWhereInput = q
     ? {
         OR: [
-          { action: { contains: q.replace(/\s+/g, "_") } },
-          { entity: { contains: q } },
-          { details: { contains: q } },
-          { user: { name: { contains: q } } },
+          { action: { contains: q.replace(/\s+/g, "_"), mode: "insensitive" } },
+          { entity: { contains: q, mode: "insensitive" } },
+          { details: { contains: q, mode: "insensitive" } },
+          { userName: { contains: q, mode: "insensitive" } },
         ],
       }
     : {};
   const [logs, total] = await Promise.all([
     db.auditLog.findMany({
       where,
-      include: { user: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
       take,
       skip,
@@ -75,7 +76,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
             {logs.map((log) => (
               <tr key={log.id}>
                 <td className="whitespace-nowrap">{format(log.createdAt, "dd MMM yyyy HH:mm")}</td>
-                <td>{log.user?.name ?? "System"}</td>
+                <td>{log.userName ?? "System"}</td>
                 <td>{actionLabel(log.action)}</td>
                 <td>{ENTITY_LABEL[log.entity] ?? log.entity}</td>
                 <td className="text-xs text-ink/70">{log.details ? plainStatus(log.details) : null}</td>

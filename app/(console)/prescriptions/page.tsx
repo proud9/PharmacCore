@@ -1,12 +1,9 @@
+import { pageTenant } from "@/lib/tenant";
 import { format } from "date-fns";
-import { redirect } from "next/navigation";
-import { homePath } from "@/lib/paths";
-import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { PrescriptionForm } from "@/components/forms/PrescriptionForm";
 import { DispenseButton } from "@/components/forms/DispenseButton";
-import { canDispense, requireUser } from "@/lib/auth";
 import { ListFilter, ListSearch } from "@/components/search/ListSearch";
 import { Pagination } from "@/components/Pagination";
 import { paging, searchText, type ListParams } from "@/lib/paging";
@@ -15,9 +12,8 @@ import type { Prisma } from "@prisma/client";
 const PAGE = 20;
 
 export default async function PrescriptionsPage({ searchParams }: { searchParams: Promise<ListParams> }) {
-  const user = await requireUser();
-  // Prescriptions hold patients' health details, so only roles that dispense see them (as with Patients).
-  if (!user || !canDispense(user.role)) redirect(homePath(user?.role ?? ""));
+  const t = await pageTenant("counter");
+  const { db } = t;
   const params = await searchParams;
   const { page, take, skip, pageSize } = paging(params, PAGE);
   const q = searchText(params);
@@ -27,10 +23,10 @@ export default async function PrescriptionsPage({ searchParams }: { searchParams
     ...(q
       ? {
           OR: [
-            { rxNumber: { contains: q } },
-            { prescriber: { contains: q } },
-            { patient: { firstName: { contains: q } } },
-            { patient: { lastName: { contains: q } } },
+            { rxNumber: { contains: q, mode: "insensitive" } },
+            { prescriber: { contains: q, mode: "insensitive" } },
+            { patient: { firstName: { contains: q, mode: "insensitive" } } },
+            { patient: { lastName: { contains: q, mode: "insensitive" } } },
           ],
         }
       : {}),
@@ -45,7 +41,7 @@ export default async function PrescriptionsPage({ searchParams }: { searchParams
     }),
     db.prescription.count({ where }),
   ]);
-  const allow = Boolean(user && canDispense(user.role));
+  const allow = !t.readOnly;
 
   return (
     <div>

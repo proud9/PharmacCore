@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canDispense, requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { apiTenant } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 import { ref } from "@/lib/utils";
 
@@ -23,27 +22,33 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const user = await requireUser();
-  if (!user || !canDispense(user.role)) {
-    return NextResponse.json({ error: "Only a pharmacist can file prescriptions." }, { status: 403 });
-  }
+  const auth = await apiTenant("counter");
+  if (!auth.ok) return auth.response;
+  const { t } = auth;
+  const { db } = t;
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Prescription is incomplete." }, { status: 400 });
   }
+  const known = await Promise.all([
+    db.patient.count({ where: { id: parsed.data.patientId } }),
+    db.product.count({ where: { id: { in: parsed.data.items.map((item) => item.productId) }, active: true } }),
+  ]);
+  if (known[0] === 0 || known[1] !== new Set(parsed.data.items.map((item) => item.productId)).size) {
+    return NextResponse.json({ error: "Choose the patient and items again." }, { status: 400 });
+  }
   const rx = await db.prescription.create({
     data: {
+      orgId: t.org.id,
       rxNumber: ref("RX"),
       patientId: parsed.data.patientId,
-      pharmacistId: user.id,
       prescriber: parsed.data.prescriber,
       clinic: parsed.data.clinic,
       notes: parsed.data.notes,
-      items: { create: parsed.data.items },
+      items: { create: parsed.data.items.map((item) => ({ ...item, orgId: t.org.id })) },
     },
   });
-  await audit({
-    userId: user.id,
+  await audit(t, {
     action: "RX_CREATED",
     entity: "Prescription",
     entityId: rx.id,

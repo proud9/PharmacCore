@@ -1,16 +1,12 @@
 import Link from "next/link";
 import { ImagePlus, Landmark } from "lucide-react";
-import { canEditCompany, requireUser } from "@/lib/auth";
-import { setupGaps } from "@/lib/setup";
 
 /**
- * Reminder for wholesale administrators whose set-up skipped the logo or bank details.
- * Disappears once both are saved on Company details.
+ * Reminder for a selling business whose sign-up skipped the logo or bank details.
+ * Disappears once both are saved on Business details.
  */
-export async function FinishSetup() {
-  const user = await requireUser();
-  if (!user || !canEditCompany(user.role)) return null;
-  const gaps = await setupGaps();
+export function FinishSetup({ org }: { org: { logoPath: string | null; bankName: string | null; accountNumber: string | null } }) {
+  const gaps = { logo: !org.logoPath, bank: !(org.bankName && org.accountNumber) };
   if (!gaps.logo && !gaps.bank) return null;
 
   return (

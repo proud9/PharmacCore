@@ -1,14 +1,13 @@
 import { addDays } from "date-fns";
-import type { Prisma } from "@prisma/client";
-import { db } from "./db";
+import type { TenantDb, Tx } from "./tenant";
 
-export async function onHand(productId: string) {
+export async function onHand(db: TenantDb, productId: string) {
   const batches = await db.batch.findMany({ where: { productId } });
   return batches.reduce((sum, batch) => sum + batch.quantity, 0);
 }
 
 /** Removes stock earliest-expiry first. Pass the transaction client so a failure rolls back every batch change. */
-export async function deductStock(tx: Prisma.TransactionClient, productId: string, quantity: number) {
+export async function deductStock(tx: Tx, productId: string, quantity: number) {
   const batches = await tx.batch.findMany({
     where: { productId, quantity: { gt: 0 } },
     orderBy: { expiryDate: "asc" },
@@ -34,7 +33,8 @@ export async function deductStock(tx: Prisma.TransactionClient, productId: strin
  * received batch, or to a new "ADJUST" batch with `newBatchExpiry` when the product has none.
  */
 export async function setStockLevel(
-  tx: Prisma.TransactionClient,
+  tx: Tx,
+  orgId: string,
   productId: string,
   target: number,
   newBatchExpiry?: Date | null,
@@ -53,6 +53,7 @@ export async function setStockLevel(
     } else if (newBatchExpiry) {
       await tx.batch.create({
         data: {
+          orgId,
           productId,
           lotNumber: newBatchLot,
           expiryDate: newBatchExpiry,
@@ -67,7 +68,8 @@ export async function setStockLevel(
   return current;
 }
 
-export async function receiveBatch(input: {
+export async function receiveBatch(db: TenantDb, input: {
+  orgId: string;
   productId: string;
   lotNumber: string;
   expiryDate: Date;

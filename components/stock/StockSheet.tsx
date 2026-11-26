@@ -80,11 +80,13 @@ export function StockSheet({
     }
   }, [counts, notes]);
 
+  /** Close qty is a whole number from 0 to open qty: a count can't add stock (that's done in Inventory). */
   function setClose(row: SheetRow, value: string) {
     setCounts((current) => {
       const next = { ...current };
-      if (value === "") delete next[row.id];
-      else next[row.id] = { close: value, open: row.openQty, price: row.price };
+      const qty = Math.trunc(Number(value));
+      if (value === "" || !Number.isFinite(qty)) delete next[row.id];
+      else next[row.id] = { close: String(Math.min(Math.max(qty, 0), row.openQty)), open: row.openQty, price: row.price };
       return next;
     });
   }
@@ -207,6 +209,8 @@ export function StockSheet({
                       className="w-24"
                       type="number"
                       min={0}
+                      max={row.openQty}
+                      step={1}
                       aria-label={`Close qty for ${row.name}`}
                       value={counts[row.id]?.close ?? String(row.openQty)}
                       onChange={(e) => setClose(row, e.target.value)}
@@ -215,8 +219,8 @@ export function StockSheet({
                     close
                   )}
                 </td>
-                <td className={cn("text-right tabular-nums", sold < 0 && "font-semibold text-rust")}>{sold}</td>
-                <td className={cn("text-right tabular-nums", amount < 0 && "text-rust")}>{money(amount)}</td>
+                <td className="text-right tabular-nums">{sold}</td>
+                <td className="text-right tabular-nums">{money(amount)}</td>
                 <td className={cn("whitespace-nowrap", row.expired && "font-semibold text-rust")}>
                   {row.expiryLabel ?? "—"}
                 </td>
@@ -245,8 +249,8 @@ export function StockSheet({
       </div>
       {pager}
       <p className="mt-2 text-xs text-ink/60">
-        Sold = open qty − close qty. A negative sold (in red) means more was counted than the system holds. Counted rows are
-        tinted and remembered as you move between pages.
+        Sold = open qty − close qty. Close qty can't be more than open qty: add found stock in Inventory first. Counted rows
+        are tinted and remembered as you move between pages.
       </p>
 
       {message ? <p className="mt-3 text-sm">{message}</p> : null}

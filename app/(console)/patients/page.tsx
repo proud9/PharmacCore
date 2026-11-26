@@ -1,8 +1,5 @@
+import { pageTenant } from "@/lib/tenant";
 import { format } from "date-fns";
-import { redirect } from "next/navigation";
-import { canSell, requireUser } from "@/lib/auth";
-import { homePath } from "@/lib/paths";
-import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { PatientForm } from "@/components/forms/PatientForm";
 import { ListSearch } from "@/components/search/ListSearch";
@@ -11,19 +8,16 @@ import { paging, searchText, type ListParams } from "@/lib/paging";
 import type { Prisma } from "@prisma/client";
 
 export default async function PatientsPage({ searchParams }: { searchParams: Promise<ListParams> }) {
-  const user = await requireUser();
-  if (!user || !canSell(user.role)) redirect(homePath(user?.role ?? ""));
+  const t = await pageTenant("counter");
+  const { db } = t;
   const params = await searchParams;
   const { page, take, skip, pageSize } = paging(params);
   const q = searchText(params);
   const where: Prisma.PatientWhereInput = q
     ? {
         OR: [
-          { firstName: { contains: q } },
-          { lastName: { contains: q } },
-          { phone: { contains: q } },
-          { insurance: { contains: q } },
-          { allergies: { contains: q } },
+          { firstName: { contains: q, mode: "insensitive" } },
+          { lastName: { contains: q, mode: "insensitive" } },
         ],
       }
     : {};
@@ -44,7 +38,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
       <div className="grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
         <section className="overflow-hidden rounded-2xl border border-pine-900/10 bg-white p-4 shadow-panel">
           <div className="mb-3 max-w-md">
-            <ListSearch placeholder="Search by name, phone, or insurance" />
+            <ListSearch placeholder="Search by name" />
           </div>
           <table className="table-grid">
             <thead>
@@ -63,7 +57,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
                       {patient.lastName}, {patient.firstName}
                     </p>
                     <p className="text-xs text-ink/60">
-                      {patient.dateOfBirth ? format(patient.dateOfBirth, "dd MMM yyyy") : "DOB unknown"}
+                      {patient.dateOfBirth ? format(new Date(patient.dateOfBirth), "dd MMM yyyy") : "DOB unknown"}
                     </p>
                   </td>
                   <td className="text-sm">

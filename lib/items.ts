@@ -1,5 +1,5 @@
-import { db } from "./db";
 import { audit } from "./audit";
+import type { Tenant } from "./tenant";
 import { firstIssue, itemSchema, parseExpiry } from "./stocksheet";
 
 export type ItemResult = { row: number; productId: string; status: "created" | "updated"; stockIgnored?: boolean };
@@ -14,7 +14,8 @@ export type ItemError = { row: number; message: string };
  *   with the given expiry (required) and entered date (defaults to today).
  * Each row stands alone, so one bad row doesn't block the rest of an import.
  */
-export async function saveItems(rows: { row: number; input: unknown }[], userId: string) {
+export async function saveItems(t: Tenant, rows: { row: number; input: unknown }[]) {
+  const { db } = t;
   const results: ItemResult[] = [];
   const errors: ItemError[] = [];
   const seen = new Set<string>();
@@ -43,7 +44,7 @@ export async function saveItems(rows: { row: number; input: unknown }[], userId:
     };
 
     try {
-      const existing = await db.product.findUnique({ where: { sku: line.stockCode } });
+      const existing = await db.product.findUnique({ where: { orgId_sku: { orgId: t.org.id, sku: line.stockCode } } });
       if (existing?.deletedAt) {
         errors.push({ row, message: `Stock code ${line.stockCode} is in the delete queue. Restore it from the delete queue to use it again.` });
         continue;
@@ -61,13 +62,14 @@ export async function saveItems(rows: { row: number; input: unknown }[], userId:
         errors.push({ row, message: "New items with opening stock need an expiry date." });
         continue;
       }
-      const product = await db.$transaction(async (tx) => {
+      const product = await t.tx(async (tx) => {
         const created = await tx.product.create({
-          data: { sku: line.stockCode, costPrice: 0, ...details },
+          data: { orgId: t.org.id, sku: line.stockCode, costPrice: 0, ...details },
         });
         if (openingStock > 0 && expiry) {
           await tx.batch.create({
             data: {
+              orgId: t.org.id,
               productId: created.id,
               lotNumber: line.batchNo ?? "OPENING",
               expiryDate: expiry,
@@ -86,8 +88,7 @@ export async function saveItems(rows: { row: number; input: unknown }[], userId:
 
   if (results.length) {
     const created = results.filter((r) => r.status === "created").length;
-    await audit({
-      userId,
+    await audit(t, {
       action: "INVENTORY_ITEMS_SAVED",
       entity: "Product",
       details: `${created} added, ${results.length - created} updated`,

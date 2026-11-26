@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canAdjustStock, requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { apiTenant } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 import { RETENTION_DAYS } from "@/lib/deletion";
 
@@ -12,10 +11,10 @@ const schema = z.object({
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
-  if (!user || !canAdjustStock(user.role)) {
-    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
-  }
+  const auth = await apiTenant("catalog");
+  if (!auth.ok) return auth.response;
+  const { t } = auth;
+  const { db, user } = t;
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Check the form." }, { status: 400 });
@@ -45,8 +44,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       deletedByName: user.name,
     },
   });
-  await audit({
-    userId: user.id,
+  await audit(t, {
     action: "ITEM_DELETED",
     entity: "Product",
     entityId: id,

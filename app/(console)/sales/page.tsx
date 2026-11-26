@@ -1,7 +1,6 @@
+import { pageTenant } from "@/lib/tenant";
 import Link from "next/link";
 import { format } from "date-fns";
-import { db } from "@/lib/db";
-import { getPharmacy } from "@/lib/pharmacy";
 import { PageHeader } from "@/components/PageHeader";
 import { money } from "@/lib/utils";
 import { ListFilter, ListSearch } from "@/components/search/ListSearch";
@@ -12,6 +11,8 @@ import type { Prisma } from "@prisma/client";
 const PAYMENTS = ["CASH", "CARD", "MOBILE", "INSURANCE"];
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<ListParams> }) {
+  const t = await pageTenant("counter");
+  const { db } = t;
   const params = await searchParams;
   const { page, take, skip, pageSize } = paging(params);
   const q = searchText(params);
@@ -21,10 +22,10 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
     ...(q
       ? {
           OR: [
-            { invoiceNo: { contains: q } },
-            { cashier: { name: { contains: q } } },
-            { patient: { firstName: { contains: q } } },
-            { patient: { lastName: { contains: q } } },
+            { invoiceNo: { contains: q, mode: "insensitive" } },
+            { cashierName: { contains: q, mode: "insensitive" } },
+            { patient: { firstName: { contains: q, mode: "insensitive" } } },
+            { patient: { lastName: { contains: q, mode: "insensitive" } } },
           ],
         }
       : {}),
@@ -32,13 +33,13 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
   const [sales, total, pharmacy] = await Promise.all([
     db.sale.findMany({
       where,
-      include: { cashier: { select: { name: true } }, patient: { select: { firstName: true, lastName: true } } },
+      include: { patient: { select: { firstName: true, lastName: true } } },
       orderBy: { createdAt: "desc" },
       take,
       skip,
     }),
     db.sale.count({ where }),
-    getPharmacy(),
+    Promise.resolve(t.org),
   ]);
   const currency = pharmacy?.currency ?? "ZMW";
 
@@ -75,7 +76,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                   </Link>
                 </td>
                 <td>{format(sale.createdAt, "dd MMM yyyy HH:mm")}</td>
-                <td>{sale.cashier.name}</td>
+                <td>{sale.cashierName}</td>
                 <td>{sale.patient ? `${sale.patient.lastName}, ${sale.patient.firstName}` : "Walk-in"}</td>
                 <td>{sale.payment}</td>
                 <td>{money(sale.total, currency)}</td>

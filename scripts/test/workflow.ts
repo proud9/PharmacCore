@@ -1,326 +1,338 @@
 /**
- * The whole business, from an empty installation, in the order it happens:
- * owner sets up → admin adds staff → sales stocks the warehouse and adds clients → clients order →
- * finance prices → client accepts → finance invoices → sales prepares, issues the delivery note and
- * dispatches (stock leaves) → client receives → finance records payment → retail counter, dispensing
- * and a stock take → admin reviews the activity log. Every page each person opens is checked for
- * raw codes and wording problems.
+ * Plays the whole trading network from an empty installation: sign-ups of every account type,
+ * the Parallax team's work, connections, and orders along the chain
+ * manufacturer → wholesaler → retailer / client, with stock moving at dispatch and delivery.
  */
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import type { PrismaClient } from "@prisma/client";
-import { Client, ROOT, check, iso, note, scanLabels, section, visibleText } from "./harness";
+import { Client, check, iso, runScript, scanLabels, section } from "./harness";
 
-const WORDING = [/\bthe pharmacy\b/gi, /\bpharmacy details\b/gi, /\bPOS\b/g, /\bconsignments?\b/gi, /\bpharmacist\b/gi];
+const PASSWORD = "Passw0rd!2026";
+type Json = Record<string, any>;
 
-export async function workflowSuite(base: string, db: PrismaClient) {
-  const pw = "Passw0rd!";
-  const visitor = new Client(base, "visitor");
+async function signUp(base: string, kind: string, businessName: string, email: string, name: string) {
+  const client = new Client(base, email.split("@")[0]);
+  const { status, data } = await client.json("POST", "/api/auth/register", { kind, businessName, town: "Lusaka", phone: "0977000000", name, email, password: PASSWORD });
+  check(`${kind.toLowerCase()} signs up`, status === 201, `${status} ${JSON.stringify(data)}`);
+  return client;
+}
 
-  async function look(who: Client, url: string, expectText?: string | RegExp) {
-    const res = await who.page(url);
-    const ok = res.status === 200 && res.path === url.split("#")[0];
-    if (!ok) check(`${who.label} opens ${url}`, false, `got ${res.status} at ${res.path}`);
-    if (expectText) {
-      const text = visibleText(res.html);
-      const found = typeof expectText === "string" ? text.includes(expectText) : expectText.test(text);
-      check(`${who.label} sees "${expectText}" on ${url}`, found, text.slice(0, 160));
-    }
-    scanLabels(who.label, url, res.html, WORDING);
-    return res;
+async function act(client: Client, orderId: string, body: Json, expect = 200) {
+  const { status, data } = await client.json("POST", `/api/trade/orders/${orderId}`, body);
+  return { ok: status === expect, status, data, detail: `${status} ${JSON.stringify(data)}` };
+}
+
+export async function workflowSuite(base: string, db: PrismaClient, env: NodeJS.ProcessEnv) {
+  section("Sign-up");
+  const maker = await signUp(base, "MANUFACTURER", "Copper Pharma Ltd", "maker@copper.test", "Mwila Banda");
+  const whole = await signUp(base, "WHOLESALER", "Kilmers Wholesale", "owner@kilmers.test", "Chanda Mulenga");
+  const shop = await signUp(base, "RETAILER", "Banda Pharmacy", "grace@banda.test", "Grace Banda");
+  const clinic = await signUp(base, "CLIENT", "Hope Clinic", "stores@hope.test", "Sister Agnes");
+  const dup = await new Client(base, "dup").json("POST", "/api/auth/register", { kind: "CLIENT", businessName: "Again", name: "Again", email: "stores@hope.test", password: PASSWORD });
+  check("a used email can't sign up again", dup.status === 409, String(dup.status));
+  const short = await new Client(base, "short").json("POST", "/api/auth/register", { kind: "CLIENT", businessName: "Short", name: "Short", email: "short@x.test", password: "short" });
+  check("short passwords are refused", short.status === 400);
+
+  const orgs = await db.organization.findMany({ include: { subscription: true } });
+  const org = (name: string) => orgs.find((o) => o.name === name)!;
+  check("paying businesses start on a trial", ["Copper Pharma Ltd", "Kilmers Wholesale", "Banda Pharmacy"].every((n) => org(n).subscription?.trialEndsAt));
+  check("clients have no subscription (free)", !org("Hope Clinic").subscription);
+  for (const [client, path] of [[whole, "/inventory"], [shop, "/pos"], [maker, "/items"], [clinic, "/purchases"]] as const) {
+    const page = await client.page(path);
+    check(`${client.label} opens ${path}`, page.status === 200 && page.path === path, `${page.status} ${page.path}`);
   }
+  check("a client can't open Inventory", (await clinic.page("/inventory")).path === "/dashboard");
+  check("a manufacturer can't open the sales counter", (await maker.page("/pos")).path === "/dashboard");
+  check("a wholesaler has no sales counter", (await whole.page("/pos")).path === "/dashboard");
 
-  const onHand = async (sku: string) => {
-    const product = await db.product.findUniqueOrThrow({ where: { sku }, include: { batches: true } });
-    return product.batches.reduce((sum, b) => sum + b.quantity, 0);
-  };
+  section("Business details are encrypted at rest");
+  const saved = await whole.json("POST", "/api/company", { name: "Kilmers Wholesale", tpin: "1002003004", bankName: "Zanaco", accountName: "Kilmers", accountNumber: "0011223344", listed: true });
+  check("wholesaler saves bank details", saved.status === 200, JSON.stringify(saved.data));
+  const rawBank = await db.$queryRawUnsafe<{ accountNumber: string; tpin: string }[]>(`SELECT "accountNumber", tpin FROM "Organization" WHERE name = 'Kilmers Wholesale'`);
+  check("account number is stored encrypted", rawBank[0].accountNumber.startsWith("enc:1:"), rawBank[0].accountNumber);
+  check("TPIN is stored encrypted", rawBank[0].tpin.startsWith("enc:1:"));
+  const settings = await whole.page("/settings");
+  check("the business still reads its own bank details", settings.html.includes("0011223344"));
 
-  // ------------------------------------------------------------------ 1. Owner sets up
-  section("Workflow 1: owner sets up the installation");
-  let res = await visitor.page("/");
-  check("landing page sends 'Create an account' to set-up before installation", res.html.includes('href="/setup"'));
-  let r = await visitor.json("POST", "/api/auth/register", { name: "Early", institutionName: "Early Bird", kind: "PHARMACY", email: "early@test.local", password: pw });
-  check("client sign-up waits until the wholesale is set up", r.status === 409, `${r.status}`);
-  check("set-up page opens", (await visitor.page("/setup")).path === "/setup");
+  section("Parallax team");
+  const created = runScript(env, "scripts/create-admin.ts", ["--email", "team@parallax.test", "--name", "Team Member"]);
+  const temp = /Temporary password: (\S+)/.exec(created.stdout)?.[1];
+  check("admin:create makes a team login", created.status === 0 && !!temp, created.stderr);
+  const team = new Client(base, "team");
+  const teamLogin = await team.login("team@parallax.test", temp ?? "");
+  check("team login must choose a new password", teamLogin.data.home === "/account/password", JSON.stringify(teamLogin.data));
+  check("team pages wait for the new password", (await team.page("/admin")).path === "/account/password");
+  const changed = await team.json("POST", "/api/account/password", { current: temp, password: PASSWORD });
+  check("team member sets a password", changed.status === 200, JSON.stringify(changed.data));
+  check("team member opens the overview", (await team.page("/admin")).status === 200);
+  const made = await team.json("POST", "/api/admin/businesses", { kind: "CLIENT", businessName: "Mansa District Hospital", name: "Dr Mansa", email: "stores@mansa.test" });
+  check("team creates a business account", made.status === 201 && !!made.data.temporaryPassword, JSON.stringify(made.data));
+  const mansa = new Client(base, "mansa");
+  const mansaLogin = await mansa.login("stores@mansa.test", made.data.temporaryPassword);
+  check("new owner signs in with the temporary password", mansaLogin.status === 200 && mansaLogin.data.home === "/account/password");
+  const mansaUser = await db.user.findUniqueOrThrow({ where: { email: "stores@mansa.test" } });
+  const reset = await team.json("POST", `/api/admin/users/${mansaUser.id}`, { action: "RESET_PASSWORD" });
+  check("team resets a password", reset.status === 200 && !!reset.data.temporaryPassword);
+  check("the reset signs the owner out", (await mansa.page("/dashboard")).path.startsWith("/login"));
+  const mansaOrg = await db.organization.findFirstOrThrow({ where: { name: "Mansa District Hospital" } });
+  const sus = await team.json("POST", `/api/admin/businesses/${mansaOrg.id}/status`, { status: "SUSPENDED" });
+  check("team suspends a business", sus.status === 200);
+  const suspendedLogin = await new Client(base, "mansa2").login("stores@mansa.test", reset.data.temporaryPassword);
+  check("a suspended business can't sign in", suspendedLogin.status === 403, String(suspendedLogin.status));
+  const ann = await team.json("POST", "/api/admin/announcements", { audience: "KIND", kind: "WHOLESALER", title: "Maintenance on Sunday", body: "Parallax is down 2–3 am." });
+  check("team sends an announcement", ann.status === 201);
+  const found = await team.json("GET", "/api/admin/businesses?q=" + encodeURIComponent("kilmers wh"));
+  const pickedOrg = found.data.results?.find((row: { name: string }) => row.name === "Kilmers Wholesale");
+  check("team finds a business by typing part of its name", Boolean(pickedOrg), JSON.stringify(found.data));
+  const one = await team.json("POST", "/api/admin/announcements", { audience: "ORG", orgId: pickedOrg?.id, title: "Hello", body: "Just for you." });
+  check("team sends an announcement to one business", one.status === 201);
+  check("…but not to a business that doesn't exist", (await team.json("POST", "/api/admin/announcements", { audience: "ORG", orgId: "nope", title: "Hi", body: "x x" })).status === 400);
+  check("a wholesaler sees it in notifications", (await whole.page("/notifications")).html.includes("Maintenance on Sunday"));
+  check("a client doesn't", !(await clinic.page("/notifications")).html.includes("Maintenance on Sunday"));
+  const teamApi = await team.json("POST", "/api/trade/orders", { side: "buyer", orgId: org("Kilmers Wholesale").id, lines: [{ name: "x", quantity: 1 }] });
+  check("the team can't use business routes", teamApi.status === 403, String(teamApi.status));
+  check("the team can't open business pages", (await team.page("/orders")).path === "/admin");
+  check("a business can't open the team area", (await whole.page("/admin")).path === "/dashboard");
+  check("a business can't call team routes", (await whole.json("POST", "/api/admin/businesses", {})).status === 403);
 
-  const owner = new Client(base, "Admin");
-  r = await owner.json("POST", "/api/setup", {
-    owner: { name: "Mutale Owner", email: "owner@kilmers.test", password: pw },
-    company: { name: "Kilmers Medical Supplies", phone: "+260 977 123456", address: "Plot 12, Cairo Road, Lusaka", email: "orders@kilmers.test", license: "ZAMRA-W-0192", tpin: "1002003004" },
-  });
-  check("owner completes set-up and is signed in", [200, 201].includes(r.status) && owner.cookie, `${r.status} ${JSON.stringify(r.data)}`);
-  await look(owner, "/dashboard", "Finish setting up");
-  const logo = readFileSync(path.join(ROOT, "public", "brand", "parallax-logo-64.png"));
-  const form = new FormData();
-  form.append("logo", new Blob([logo], { type: "image/png" }), "logo.png");
-  const up = await owner.req("POST", "/api/pharmacy/logo", undefined, { data: form });
-  check("owner uploads the company logo", up.status === 200, `${up.status} ${up.text.slice(0, 80)}`);
-  r = await owner.json("POST", "/api/pharmacy", { name: "Kilmers Medical Supplies", bankName: "Zanaco", accountName: "Kilmers Medical Supplies Ltd", accountNumber: "0123456789012", bankBranch: "Cairo Road", swiftCode: "ZNCOZMLU" });
-  check("owner saves bank details", r.status === 200, `${r.status}`);
-  res = await look(owner, "/dashboard");
-  check("set-up reminder disappears once logo and bank are in", !visibleText(res.html).includes("Finish setting up"));
-  check("second set-up is refused", (await visitor.json("POST", "/api/setup", { owner: { name: "X", email: "x@test.local", password: pw }, company: { name: "X Co", phone: "0977000000", address: "Somewhere 1" } })).status === 409);
+  section("Connections");
+  const W = org("Kilmers Wholesale").id;
+  const M = org("Copper Pharma Ltd").id;
+  const R = org("Banda Pharmacy").id;
+  const C = org("Hope Clinic").id;
+  const directory = await shop.page("/directory");
+  check("retailer finds the wholesaler in the directory", directory.html.includes("Kilmers Wholesale"));
+  check("retailer's directory leaves out manufacturers", !directory.html.includes("Copper Pharma Ltd"));
+  check("a client can't ask a manufacturer to connect", (await clinic.json("POST", "/api/connections", { orgId: M })).status === 400);
+  const ask = async (from: Client, to: string) => (await from.json("POST", "/api/connections", { orgId: to })).status;
+  check("wholesaler asks the manufacturer", (await ask(whole, M)) === 201);
+  check("retailer asks the wholesaler", (await ask(shop, W)) === 201);
+  check("client asks the wholesaler", (await ask(clinic, W)) === 201);
+  check("client asks the retailer", (await ask(clinic, R)) === 201);
+  const links = await db.tradeLink.findMany();
+  const linkOf = (seller: string, buyer: string) => links.find((l) => l.sellerOrgId === seller && l.buyerOrgId === buyer)!;
+  check("manufacturer accepts", (await maker.json("POST", `/api/connections/${linkOf(M, W).id}`, { action: "ACCEPT" })).status === 200);
+  check("the asker can't accept its own request", (await shop.json("POST", `/api/connections/${linkOf(W, R).id}`, { action: "ACCEPT" })).status === 400);
+  check("wholesaler accepts the retailer", (await whole.json("POST", `/api/connections/${linkOf(W, R).id}`, { action: "ACCEPT" })).status === 200);
+  check("wholesaler accepts the client", (await whole.json("POST", `/api/connections/${linkOf(W, C).id}`, { action: "ACCEPT" })).status === 200);
+  check("retailer accepts the client", (await shop.json("POST", `/api/connections/${linkOf(R, C).id}`, { action: "ACCEPT" })).status === 200);
+  check("wholesaler: retailer pays before delivery", (await whole.json("POST", `/api/connections/${linkOf(W, R).id}`, { action: "TERMS", paymentTerms: "PREPAY", creditDays: null })).status === 200);
+  check("wholesaler: client buys on 30 days' credit", (await whole.json("POST", `/api/connections/${linkOf(W, C).id}`, { action: "TERMS", paymentTerms: "CREDIT", creditDays: 30 })).status === 200);
+  check("only the seller sets terms", (await clinic.json("POST", `/api/connections/${linkOf(W, C).id}`, { action: "TERMS", paymentTerms: "PREPAY", creditDays: null })).status === 403);
+  const noteCount = await db.notification.count({ where: { orgId: W } });
+  check("the asked business gets notifications", noteCount >= 2, String(noteCount));
 
-  // ------------------------------------------------------------------ 2. Admin adds the team
-  section("Workflow 2: admin adds Finance and Sales");
-  r = await owner.json("POST", "/api/staff", { name: "Chanda Finance", email: "chanda@kilmers.test", password: pw, role: "FINANCE" });
-  check("admin adds a Finance person", r.status === 200, `${r.status}`);
-  r = await owner.json("POST", "/api/staff", { name: "Noah Sales", email: "noah@kilmers.test", password: pw, role: "SALES" });
-  check("admin adds a Sales person", r.status === 200, `${r.status}`);
-  await look(owner, "/staff", "Chanda Finance");
-  const finance = new Client(base, "Finance");
-  const sales = new Client(base, "Sales");
-  check("Finance signs in to Payments", (await finance.login("chanda@kilmers.test", pw)).data.home === "/wholesale/payments");
-  check("Sales signs in to Wholesale orders", (await sales.login("noah@kilmers.test", pw)).data.home === "/wholesale");
-
-  // ------------------------------------------------------------------ 3. Sales stocks the warehouse
-  section("Workflow 3: Sales stocks the warehouse");
-  await look(sales, "/wholesale");
-  await look(sales, "/inventory");
-  r = await sales.json("POST", "/api/inventory/items", {
-    rows: [
-      { row: 1, input: { stockCode: "AMX-500", description: "Amoxicillin 500 mg capsules", type: "OTC", unit: "Box of 100", price: 85, batchNo: "AMX24A", openingStock: 200, expiry: iso(400), requiresRx: true } },
-      { row: 2, input: { stockCode: "MOR-10", description: "Morphine 10 mg tablets", type: "DDA", unit: "Box of 30", price: 240, batchNo: "MOR01", openingStock: 20, expiry: iso(300), requiresRx: true } },
-      { row: 3, input: { stockCode: "GLV-M", description: "Examination gloves (M)", type: "OTC", unit: "Box of 100", price: 120, batchNo: "GLV9", openingStock: 500, expiry: iso(700) } },
-    ],
-  });
-  check("Sales adds three items with opening stock", r.status === 200 && (await db.product.count()) === 3, `${r.status} ${JSON.stringify(r.data).slice(0, 160)}`);
-  const csv = "Stock code,Ctg no.,Batch no.,Description,Type,Unit sale,Price,Prescription,Opening stock,Entered,Expiry\n" +
-    `PCM-500,10,PCM77,Paracetamol 500 mg tablets,OTC,Box of 1000,150,Not required,300,${iso(0)},${iso(500)}\n` +
-    `ORS-1,11,ORS5,Oral rehydration salts,OTC,Box of 50,60,Not required,5,${iso(0)},${iso(200)}\n`;
-  const upload = new FormData();
-  upload.append("file", new Blob([csv], { type: "text/csv" }), "items.csv");
-  const imp = await sales.req("POST", "/api/inventory/import", undefined, { data: upload });
-  check("Sales imports two more items from a CSV", imp.status === 200 && (await db.product.count()) === 5, `${imp.status} ${imp.text.slice(0, 160)}`);
-  check("template downloads for Sales", (await sales.req("GET", "/api/inventory/template")).status === 200);
-  const amx = await db.product.findUniqueOrThrow({ where: { sku: "AMX-500" } });
-  r = await sales.json("POST", "/api/stock/receive", { productId: amx.id, lotNumber: "AMX24B", expiryDate: iso(500), quantity: 100 });
-  check("Sales receives a new Amoxicillin batch", r.status === 200 && (await onHand("AMX-500")) === 300, `${r.status} on hand ${await onHand("AMX-500")}`);
-  await look(sales, `/inventory/${amx.id}`, "AMX24B");
-  const gloves = await db.product.findUniqueOrThrow({ where: { sku: "GLV-M" } });
-  r = await sales.json("POST", `/api/inventory/items/${gloves.id}`, { stockCode: "GLV-M", description: "Examination gloves (M)", type: "OTC", unit: "Box of 100", price: 125, currentStock: 500, reason: "Supplier price rise" });
-  check("Sales corrects an item's price with a reason", r.status === 200 && (await db.product.findUniqueOrThrow({ where: { id: gloves.id } })).sellingPrice === 125, `${r.status} ${JSON.stringify(r.data)}`);
-  const ors = await db.product.findUniqueOrThrow({ where: { sku: "ORS-1" } });
-  check("Sales moves an item to the delete queue", (await sales.json("POST", `/api/inventory/items/${ors.id}/delete`, { reason: "Entered twice", confirm: true })).status === 200);
-  await look(sales, "/inventory/deleted", "Oral rehydration salts");
-  check("Sales restores it", (await sales.json("POST", `/api/inventory/items/${ors.id}/restore`, {})).status === 200);
-  res = await look(sales, "/purchases", "New purchase order");
-  r = await sales.json("POST", "/api/wholesale/accounts", { name: "Levy Mwanawasa Hospital", kind: "HOSPITAL", contact: "Pharmacy stores", phone: "+260 211 000000", buyerName: "Ruth Zulu", buyerEmail: "ruth@lmh.test", buyerPassword: pw });
-  check("Sales opens an account for a hospital", r.status === 200, `${r.status}`);
-  await look(sales, "/wholesale/accounts", "Levy Mwanawasa Hospital");
-
-  // ------------------------------------------------------------------ 3b. Buying from a manufacturer
-  section("Workflow 3b: Sales orders from a manufacturer");
-  r = await sales.json("POST", "/api/manufacturers", {
-    name: "Apex Pharmaceuticals",
-    contact: "Order desk",
-    phone: "+260 211 555000",
-    email: "orders@apex.test",
-    loginName: "Apex Order Desk",
-    loginEmail: "desk@apex.test",
-    loginPassword: pw,
-  });
-  check("Sales adds a manufacturer with a login", r.status === 200 || r.status === 201, `${r.status} ${JSON.stringify(r.data)}`);
-  check("Finance cannot add manufacturers", (await finance.json("POST", "/api/manufacturers", { name: "Nope Ltd" })).status === 403);
-  await look(sales, "/purchases/manufacturers", "Apex Pharmaceuticals");
-  const apexSupplier = await db.supplier.findFirstOrThrow({ where: { name: "Apex Pharmaceuticals" } });
-  const pcmItem = await db.product.findUniqueOrThrow({ where: { sku: "PCM-500" } });
-  const amxItem = await db.product.findUniqueOrThrow({ where: { sku: "AMX-500" } });
-  const poLines = [
-    { productId: pcmItem.id, quantity: 400, unitCost: 95 },
-    { productId: amxItem.id, quantity: 150, unitCost: 55 },
+  section("Items");
+  check("manufacturer adds items", (await maker.json("POST", "/api/items", { sku: "CP-AMX", name: "Amoxicillin 500 mg capsules", strength: "500 mg", form: "capsule", unit: "box of 100", sellingPrice: 90, offered: true })).status === 201);
+  check("…and a hidden one", (await maker.json("POST", "/api/items", { sku: "CP-NEW", name: "Unreleased syrup", unit: "bottle", sellingPrice: 10, offered: false })).status === 201);
+  const stockRows = [
+    { row: 1, input: { stockCode: "K-PCM", description: "Paracetamol 500 mg tablets", type: "OTC", unit: "box of 100", price: 40, openingStock: "200", expiry: iso(400) } },
+    { row: 2, input: { stockCode: "K-ORS", description: "Oral rehydration salts", type: "OTC", unit: "box of 50", price: 70, openingStock: "100", expiry: iso(300) } },
   ];
-  check("Finance cannot raise purchase orders", (await finance.json("POST", "/api/purchases", { supplierId: apexSupplier.id, lines: poLines })).status === 403);
-  await look(sales, "/purchases/new");
-  r = await sales.json("POST", "/api/purchases", { supplierId: apexSupplier.id, notes: "Monthly restock", lines: poLines });
-  const poId = r.data.id as string;
-  check("Sales raises a purchase order", r.status === 200 && poId, `${r.status} ${JSON.stringify(r.data)}`);
-  await look(sales, "/purchases", "Waiting for price");
-  await look(sales, `/purchases/${poId}`, "Apex Pharmaceuticals");
+  const wItems = await whole.json("POST", "/api/inventory/items", { rows: stockRows });
+  check("wholesaler adds stocked items", wItems.status === 200 && wItems.data.results?.length === 2, JSON.stringify(wItems.data));
+  const rItems = await shop.json("POST", "/api/inventory/items", { rows: [{ row: 1, input: { stockCode: "B-PCM", description: "Paracetamol 500 mg tablets", type: "OTC", unit: "box of 100", price: 55, openingStock: "20", expiry: iso(200) } }] });
+  check("retailer adds a stocked item", rItems.status === 200 && rItems.data.results?.length === 1, JSON.stringify(rItems.data));
+  check("both may use the same stock code as others", (await db.product.count({ where: { sku: { endsWith: "-PCM" } } })) === 2);
 
-  const apex = new Client(base, "Manufacturer");
-  r = await apex.login("desk@apex.test", pw);
-  check("manufacturer signs in to their portal", r.status === 200 && r.data.home === "/supplier", `${r.status} ${JSON.stringify(r.data)}`);
-  await look(apex, "/supplier", "New order");
-  await look(apex, `/supplier/orders/${poId}`, "Paracetamol");
-  check("manufacturer is kept out of the wholesale console", (await apex.page("/wholesale")).path === "/supplier");
-  check("manufacturer cannot see clients' orders", (await apex.json("POST", "/api/consignments", { items: [{ productId: pcmItem.id, quantity: 1 }] })).status === 403);
-  const poItems = await db.purchaseOrderItem.findMany({ where: { orderId: poId }, include: { product: true } });
-  const poQuote = { lines: poItems.map((i) => ({ id: i.id, unitCost: i.product.sku === "PCM-500" ? 92 : 54 })), taxRate: 0, readyOn: iso(5), validUntil: iso(20), message: "Ready from our Ndola plant." };
-  check("Sales cannot enter a manufacturer's price", (await sales.json("POST", `/api/purchases/${poId}/quote`, poQuote)).status === 403);
-  r = await apex.json("POST", `/api/purchases/${poId}/quote`, poQuote);
-  check("manufacturer sends its price", r.status === 200, `${r.status} ${JSON.stringify(r.data)}`);
-  await look(finance, `/purchases/${poId}`, "Price received");
-  check("Sales cannot accept a manufacturer's price", (await sales.json("POST", `/api/purchases/${poId}/status`, { status: "ACCEPTED" })).status === 403);
-  r = await finance.json("POST", `/api/purchases/${poId}/status`, { status: "ACCEPTED" });
-  check("Finance accepts the price", r.status === 200, `${r.status} ${JSON.stringify(r.data)}`);
-  r = await apex.json("POST", `/api/purchases/${poId}/invoice`, { invoiceNo: "APX-INV-0077", dueOn: iso(30), terms: "30 days" });
-  check("manufacturer issues its invoice", r.status === 200, `${r.status} ${JSON.stringify(r.data)}`);
-  const pcmBeforePo = await onHand("PCM-500");
-  const amxBeforePo = await onHand("AMX-500");
-  check("Sales cannot record the manufacturer's dispatch", (await sales.json("POST", `/api/purchases/${poId}/dispatch`, { deliveryNoteNo: "X", lines: poItems.map((i) => ({ id: i.id, quantity: i.quantity })) })).status === 403);
-  r = await apex.json("POST", `/api/purchases/${poId}/dispatch`, { deliveryNoteNo: "APX-DN-0012", deliveryMethod: "Truck", lines: poItems.map((i) => ({ id: i.id, quantity: i.quantity })) });
-  check("manufacturer dispatches with a delivery note", r.status === 200, `${r.status} ${JSON.stringify(r.data)}`);
-  await look(sales, "/purchases", "On the way");
-  r = await sales.json("POST", `/api/purchases/${poId}/receive`, { deliveryNoteNo: "APX-DN-0012", lines: poItems.map((i) => ({ itemId: i.id, quantity: i.quantity })) });
-  check("Sales receives the delivery", r.status === 200, `${r.status} ${JSON.stringify(r.data)}`);
-  const intakes = await db.stockIntake.findMany({ where: { purchaseOrderId: poId, status: "PENDING" }, include: { product: true } });
-  check("delivered lines wait in the Inventory queue, no stock added yet", intakes.length === 2 && (await onHand("PCM-500")) === pcmBeforePo, `${intakes.length} pending`);
-  await look(sales, "/inventory", "APX-DN-0012");
-  for (const intake of intakes) {
-    const product = intake.product!;
-    r = await sales.json("POST", `/api/inventory/intake/${intake.id}`, {
-      stockCode: product.sku,
-      categoryNo: product.categoryNo ?? undefined,
-      description: product.name,
-      type: product.controlled ? "DDA" : "OTC",
-      unit: product.unit,
-      price: product.sellingPrice,
-      quantity: intake.quantity,
-      lotNumber: `APX-${product.sku}`,
-      expiry: iso(720),
-    });
-    check(`Sales completes the ${product.name} delivery line`, r.status === 200, `${r.status} ${JSON.stringify(r.data)}`);
-  }
-  check("completed lines add the stock", (await onHand("PCM-500")) === pcmBeforePo + 400 && (await onHand("AMX-500")) === amxBeforePo + 150, `PCM ${pcmBeforePo}→${await onHand("PCM-500")}, AMX ${amxBeforePo}→${await onHand("AMX-500")}`);
-  const po = await db.purchaseOrder.findUniqueOrThrow({ where: { id: poId } });
-  check("purchase order is marked received", po.status === "RECEIVED", po.status);
-  check("Sales cannot record supplier payments", (await sales.json("POST", `/api/purchases/${poId}/payment`, { amountPaid: 10 })).status === 403);
-  check("Finance records a part payment to the manufacturer", (await finance.json("POST", `/api/purchases/${poId}/payment`, { amountPaid: 20000 })).status === 200);
-  check("overpaying the manufacturer is refused", (await finance.json("POST", `/api/purchases/${poId}/payment`, { amountPaid: (po.quotedAmount ?? 0) + 1 })).status === 400);
-  check("Finance records full payment", (await finance.json("POST", `/api/purchases/${poId}/payment`, { amountPaid: po.quotedAmount })).status === 200);
-  await look(finance, `/purchases/${poId}`, "APX-INV-0077");
-  await look(apex, `/supplier/orders/${poId}`, /Paid|paid/);
+  section("Wholesaler buys from the manufacturer");
+  const catalog = await whole.json("GET", `/api/trade/catalog?seller=${M}`);
+  check("wholesaler sees the manufacturer's shown items", catalog.status === 200 && catalog.data.items.length === 1, JSON.stringify(catalog.data));
+  const leaked = JSON.stringify(catalog.data);
+  check("the item list carries no prices or stock", !/sellingPrice|costPrice|price|quantity|reorder/i.test(leaked), leaked);
+  const mItem = catalog.data.items[0];
+  const inquiry = await whole.json("POST", "/api/trade/orders", { side: "buyer", orgId: M, lines: [{ sellerProductId: mItem.id, quantity: 50 }, { name: "Gloves (typed line)", unit: "box", quantity: 10 }], message: "Need by month end" });
+  check("wholesaler sends an inquiry", inquiry.status === 201, JSON.stringify(inquiry.data));
+  const po = inquiry.data.id as string;
+  check("manufacturer gets a notification", (await db.notification.count({ where: { orgId: M, type: "INQUIRY" } })) === 1);
+  const poLines = await db.tradeOrderItem.findMany({ where: { orderId: po }, orderBy: { id: "asc" } });
+  const q1 = await act(maker, po, { action: "QUOTE", lines: poLines.map((l) => ({ id: l.id, unitPrice: l.sellerProductId ? 92 : 45 })), taxRate: 0, validUntil: iso(14) });
+  check("manufacturer quotes", q1.ok, q1.detail);
+  check("the buyer can't send the seller's quote", !(await act(whole, po, { action: "QUOTE", lines: [], taxRate: 0 })).ok);
+  const accept = await act(whole, po, { action: "ACCEPT", poNumber: "KW-PO-001" });
+  check("wholesaler accepts and sends its purchase order", accept.ok, accept.detail);
+  check("purchase order document opens for both", (await whole.page(`/documents/${po}/purchase-order`)).html.includes("KW-PO-001") && (await maker.page(`/documents/${po}/purchase-order`)).status === 200);
+  const sent = await act(maker, po, { action: "DISPATCH", lines: poLines.map((l) => ({ id: l.id, qtyDispatched: l.quantity })), deliveryNoteNo: "CP-DN-77" });
+  check("manufacturer dispatches (no stock kept)", sent.ok, sent.detail);
+  const invoiced = await act(maker, po, { action: "INVOICE", invoiceNo: "CP-INV-9" });
+  check("manufacturer invoices after delivery", invoiced.ok, invoiced.detail);
+  const got = await act(whole, po, { action: "RECEIVE", lines: poLines.map((l) => ({ id: l.id, qtyReceived: l.quantity })) });
+  check("wholesaler receives", got.ok, got.detail);
+  const intakes = await db.stockIntake.findMany({ where: { orgId: W, tradeOrderId: po } });
+  check("received lines wait in the wholesaler's Inventory", intakes.length === 2);
+  const intakeAmx = intakes.find((i) => i.sellerProductId)!;
+  const done = await whole.json("POST", `/api/inventory/intake/${intakeAmx.id}`, { stockCode: "K-AMX", description: "Amoxicillin 500 mg capsules", type: "OTC", unit: "box of 100", price: 140, quantity: 50, expiry: iso(500), lotNumber: "CP2407" });
+  check("wholesaler completes the delivery line", done.status === 200, JSON.stringify(done.data));
+  const amx = await db.product.findFirstOrThrow({ where: { orgId: W, sku: "K-AMX" }, include: { batches: true } });
+  check("stock arrives only after the line is completed", amx.batches.reduce((s, b) => s + b.quantity, 0) === 50);
+  check("the supplier's item is remembered", (await db.productLink.count({ where: { orgId: W, sellerProductId: mItem.id } })) === 1);
+  const paid = await act(maker, po, { action: "PAYMENT", amount: 50 * 92 + 10 * 45, method: "BANK_TRANSFER", paidOn: iso(0), reference: "ZAN-1" });
+  check("manufacturer records the payment", paid.ok, paid.detail);
+  check("the order closes when received and paid", (await db.tradeOrder.findUniqueOrThrow({ where: { id: po } })).status === "CLOSED");
 
-  // ------------------------------------------------------------------ 4. Clients order
-  section("Workflow 4: clients place orders");
-  const pharmacy = new Client(base, "Client");
-  r = await pharmacy.json("POST", "/api/auth/register", { name: "Grace Banda", institutionName: "Banda Community Pharmacy", kind: "PHARMACY", email: "grace@banda.test", password: pw });
-  check("a pharmacy signs itself up", [200, 201].includes(r.status), `${r.status}`);
-  res = await look(pharmacy, "/portal");
-  check("client search reads 'Search orders, wholesalers'", res.html.includes("Search orders, wholesalers"));
-  r = await pharmacy.json("GET", "/api/search?q=kilmers");
-  check("client search finds the wholesaler", r.data.hits?.some((h: { group: string }) => h.group === "Wholesaler"), JSON.stringify(r.data));
-  await look(pharmacy, "/portal/new");
-  const found = (await pharmacy.json("GET", "/api/lookup?kind=products&q=amox")).data.results;
-  const glovesHit = (await pharmacy.json("GET", "/api/lookup?kind=products&q=glove")).data.results;
-  check("client finds products by name", found.length === 1 && glovesHit.length === 1);
-  r = await pharmacy.json("POST", "/api/consignments", { deliveryAddress: "Banda Pharmacy, Chilenje", notes: "Before month end", items: [{ productId: found[0].id, quantity: 40 }, { productId: glovesHit[0].id, quantity: 10 }] });
-  const orderId = r.data.id as string;
-  check("pharmacy orders Amoxicillin and gloves", r.status === 200 && orderId, `${r.status}`);
-  await look(pharmacy, `/portal/orders/${orderId}`, "Requested");
+  section("Wholesaler sells to the retailer (pay before delivery)");
+  const wCatalog = await shop.json("GET", `/api/trade/catalog?seller=${W}`);
+  const pcm = wCatalog.data.items.find((i: Json) => i.name.startsWith("Paracetamol"));
+  const rInq = await shop.json("POST", "/api/trade/orders", { side: "buyer", orgId: W, lines: [{ sellerProductId: pcm.id, quantity: 30 }] });
+  check("retailer sends an inquiry", rInq.status === 201);
+  const rOrder = rInq.data.id as string;
+  const rLine = (await db.tradeOrderItem.findFirstOrThrow({ where: { orderId: rOrder } })).id;
+  check("the line is already linked to the wholesaler's item", !!(await db.tradeOrderItem.findUniqueOrThrow({ where: { id: rLine } })).sellerProductId);
+  check("wholesaler quotes", (await act(whole, rOrder, { action: "QUOTE", lines: [{ id: rLine, unitPrice: 50 }], taxRate: 16 })).ok);
+  const rQuoteView = await shop.page(`/purchases/${rOrder}`);
+  check("retailer sees the quoted price", rQuoteView.html.includes("50.00"));
+  check("retailer accepts", (await act(shop, rOrder, { action: "ACCEPT" })).ok);
+  const early = await act(whole, rOrder, { action: "DISPATCH", lines: [{ id: rLine, qtyDispatched: 30 }] }, 400);
+  check("pay-before-delivery orders can't dispatch unpaid", early.ok, early.detail);
+  check("wholesaler invoices", (await act(whole, rOrder, { action: "INVOICE" })).ok);
+  const total = (await db.tradeOrder.findUniqueOrThrow({ where: { id: rOrder } })).quotedAmount!;
+  check("invoice includes tax", Math.abs(total - 30 * 50 * 1.16) < 0.01, String(total));
+  check("overpayment is refused", !(await act(whole, rOrder, { action: "PAYMENT", amount: total + 100, method: "CASH", paidOn: iso(0) })).ok);
+  check("wholesaler records the payment", (await act(whole, rOrder, { action: "PAYMENT", amount: total, method: "MOBILE_MONEY", paidOn: iso(0) })).ok);
+  const pcmW = await db.product.findFirstOrThrow({ where: { orgId: W, sku: "K-PCM" }, include: { batches: true } });
+  const before = pcmW.batches.reduce((s, b) => s + b.quantity, 0);
+  check("wholesaler dispatches", (await act(whole, rOrder, { action: "DISPATCH", lines: [{ id: rLine, qtyDispatched: 30 }] })).ok);
+  const after = (await db.batch.aggregate({ where: { productId: pcmW.id }, _sum: { quantity: true } }))._sum.quantity;
+  check("stock leaves the wholesaler at dispatch", before - (after ?? 0) === 30, `${before} → ${after}`);
+  check("delivery note opens", (await shop.page(`/documents/${rOrder}/delivery-note`)).status === 200);
+  check("retailer receives", (await act(shop, rOrder, { action: "RECEIVE", lines: [{ id: rLine, qtyReceived: 30 }] })).ok);
+  check("paid and received closes the order", (await db.tradeOrder.findUniqueOrThrow({ where: { id: rOrder } })).status === "CLOSED");
+  const rIntake = await db.stockIntake.findFirstOrThrow({ where: { orgId: R, tradeOrderId: rOrder } });
+  const rDone = await shop.json("POST", `/api/inventory/intake/${rIntake.id}`, { stockCode: "B-PCM", description: "Paracetamol 500 mg tablets", type: "OTC", unit: "box of 100", price: 55, quantity: 30, expiry: iso(380) });
+  check("retailer puts the delivery into its existing paracetamol", rDone.status === 200, JSON.stringify(rDone.data));
+  check("retailer now has 50 on hand", (await db.batch.aggregate({ where: { orgId: R }, _sum: { quantity: true } }))._sum.quantity === 50);
+  const again = await shop.json("POST", "/api/trade/orders", { side: "buyer", orgId: W, lines: [{ sellerProductId: pcm.id, quantity: 1 }] });
+  check("next time the supplier's item is matched to the retailer's own", !!(await db.tradeOrderItem.findFirstOrThrow({ where: { orderId: again.data.id } })).buyerProductId);
+  await act(shop, again.data.id, { action: "CANCEL" });
 
-  const hospital = new Client(base, "Hospital");
-  check("hospital signs in with the login Sales made", (await hospital.login("ruth@lmh.test", pw)).status === 200);
-  r = await hospital.json("POST", "/api/consignments", { items: [{ productId: glovesHit[0].id, quantity: 50 }] });
-  const hospitalOrder = r.data.id as string;
-  check("hospital orders gloves", r.status === 200);
+  section("Wholesaler sells to the client (30 days' credit)");
+  const cCat = await clinic.json("GET", `/api/trade/catalog?seller=${W}`);
+  const ors = cCat.data.items.find((i: Json) => i.name.startsWith("Oral"));
+  const cInq = await clinic.json("POST", "/api/trade/orders", { side: "buyer", orgId: W, lines: [{ sellerProductId: ors.id, quantity: 20 }] });
+  const cOrder = cInq.data.id as string;
+  const cLine = (await db.tradeOrderItem.findFirstOrThrow({ where: { orderId: cOrder } })).id;
+  check("client sends an inquiry", cInq.status === 201);
+  check("wholesaler quotes the client", (await act(whole, cOrder, { action: "QUOTE", lines: [{ id: cLine, unitPrice: 80 }], taxRate: 0 })).ok);
+  check("client sees a different price than the retailer would", !(await clinic.page(`/purchases/${cOrder}`)).html.includes("50.00"));
+  check("client accepts", (await act(clinic, cOrder, { action: "ACCEPT" })).ok);
+  check("wholesaler dispatches first on credit", (await act(whole, cOrder, { action: "DISPATCH", lines: [{ id: cLine, qtyDispatched: 20 }] })).ok);
+  check("wholesaler invoices", (await act(whole, cOrder, { action: "INVOICE" })).ok);
+  const cInv = await db.tradeOrder.findUniqueOrThrow({ where: { id: cOrder } });
+  const days = Math.round(((cInv.dueOn?.getTime() ?? 0) - (cInv.invoicedAt?.getTime() ?? 0)) / 86_400_000);
+  check("due in 30 days", days === 30, String(days));
+  check("client receives", (await act(clinic, cOrder, { action: "RECEIVE", lines: [{ id: cLine, qtyReceived: 20 }] })).ok);
+  check("a client keeps no stock, so no delivery queue", (await db.stockIntake.count({ where: { orgId: C } })) === 0);
+  check("part payment", (await act(whole, cOrder, { action: "PAYMENT", amount: 600, method: "CHEQUE", paidOn: iso(0) })).ok);
+  check("still open with a balance", (await db.tradeOrder.findUniqueOrThrow({ where: { id: cOrder } })).status === "RECEIVED");
+  const payPage = await whole.page("/payments");
+  check("Payments lists the client's balance", payPage.html.includes("Hope Clinic"));
+  check("rest paid closes it", (await act(whole, cOrder, { action: "PAYMENT", amount: 1000, method: "CHEQUE", paidOn: iso(0) })).ok && (await db.tradeOrder.findUniqueOrThrow({ where: { id: cOrder } })).status === "CLOSED");
 
-  // ------------------------------------------------------------------ 5. Finance prices
-  section("Workflow 5: Finance sends prices");
-  await look(finance, "/wholesale/payments", "Nothing is owed");
-  await look(finance, "/wholesale", "Banda Community Pharmacy");
-  res = await look(finance, `/wholesale/${orderId}`, "Send a quotation");
-  check("quote form suggests a valid-until date", /name="validUntil"[^>]*value="\d{4}-\d{2}-\d{2}"/.test(res.html) || /value="\d{4}-\d{2}-\d{2}"[^>]*name="validUntil"/.test(res.html));
-  const lines = await db.consignmentItem.findMany({ where: { consignmentId: orderId }, include: { product: true } });
-  const quote = { lines: lines.map((l) => ({ id: l.id, unitPrice: l.product.sellingPrice })), taxRate: 16, readyOn: iso(2), validUntil: iso(14), adminMessage: "Ready for collection or delivery on Thursday." };
-  r = await finance.json("POST", `/api/consignments/${orderId}/quote`, quote);
-  const expected = Math.round((40 * 85 + 10 * 125) * 1.16 * 100) / 100;
-  let order = await db.consignment.findUniqueOrThrow({ where: { id: orderId } });
-  check("Finance prices the pharmacy order (tax included)", r.status === 200 && Math.abs((order.quotedAmount ?? 0) - expected) < 0.01, `${r.status} ${order.quotedAmount} vs ${expected}`);
-  const hl = await db.consignmentItem.findMany({ where: { consignmentId: hospitalOrder } });
-  check("Finance prices the hospital order", (await finance.json("POST", `/api/consignments/${hospitalOrder}/quote`, { ...quote, lines: hl.map((l) => ({ id: l.id, unitPrice: 110 })) })).status === 200);
-  await look(finance, `/documents/${orderId}/quotation`, "Kilmers Medical Supplies");
+  section("Retailer sells to the client");
+  const bCat = await clinic.json("GET", `/api/trade/catalog?seller=${R}`);
+  check("client sees the retailer's items", bCat.status === 200 && bCat.data.items.length === 1);
+  const bInq = await clinic.json("POST", "/api/trade/orders", { side: "buyer", orgId: R, lines: [{ sellerProductId: bCat.data.items[0].id, quantity: 5 }] });
+  const bOrder = bInq.data.id as string;
+  const bLine = (await db.tradeOrderItem.findFirstOrThrow({ where: { orderId: bOrder } })).id;
+  check("retailer quotes", (await act(shop, bOrder, { action: "QUOTE", lines: [{ id: bLine, unitPrice: 60 }], taxRate: 0 })).ok);
+  check("client accepts", (await act(clinic, bOrder, { action: "ACCEPT" })).ok);
+  check("retailer dispatches from its stock", (await act(shop, bOrder, { action: "DISPATCH", lines: [{ id: bLine, qtyDispatched: 5 }] })).ok);
+  const bStock = await db.batch.aggregate({ where: { orgId: R }, _sum: { quantity: true } });
+  check("retailer's stock went down", bStock._sum.quantity === 45, String(bStock._sum.quantity));
 
-  // ------------------------------------------------------------------ 6. Clients respond
-  section("Workflow 6: clients respond to prices");
-  await look(pharmacy, `/portal/orders/${orderId}`, "Price sent");
-  await look(pharmacy, `/documents/${orderId}/quotation`);
-  check("pharmacy accepts the price", (await pharmacy.json("POST", `/api/consignments/${orderId}/status`, { status: "ACCEPTED" })).status === 200);
-  check("hospital cancels its order", (await hospital.json("POST", `/api/consignments/${hospitalOrder}/status`, { status: "CANCELLED" })).status === 200);
+  section("Changing an accepted price, declining, cancelling");
+  const xInq = await shop.json("POST", "/api/trade/orders", { side: "buyer", orgId: W, lines: [{ sellerProductId: pcm.id, quantity: 5 }] });
+  const xOrder = xInq.data.id as string;
+  const xLine = (await db.tradeOrderItem.findFirstOrThrow({ where: { orderId: xOrder } })).id;
+  await act(whole, xOrder, { action: "QUOTE", lines: [{ id: xLine, unitPrice: 50 }], taxRate: 0 });
+  await act(shop, xOrder, { action: "ACCEPT" });
+  check("a new price after acceptance goes back to the buyer", (await act(whole, xOrder, { action: "QUOTE", lines: [{ id: xLine, unitPrice: 48 }], taxRate: 0 })).ok && (await db.tradeOrder.findUniqueOrThrow({ where: { id: xOrder } })).status === "QUOTED");
+  check("the buyer can cancel while the price is open", (await act(shop, xOrder, { action: "CANCEL" })).ok);
+  const yInq = await shop.json("POST", "/api/trade/orders", { side: "buyer", orgId: W, lines: [{ name: "Something rare", quantity: 1 }] });
+  check("wholesaler declines an inquiry", (await act(whole, yInq.data.id, { action: "DECLINE", message: "Not stocked" })).ok);
+  const expired = await shop.json("POST", "/api/trade/orders", { side: "buyer", orgId: W, lines: [{ sellerProductId: pcm.id, quantity: 1 }] });
+  const eLine = (await db.tradeOrderItem.findFirstOrThrow({ where: { orderId: expired.data.id } })).id;
+  await act(whole, expired.data.id, { action: "QUOTE", lines: [{ id: eLine, unitPrice: 50 }], taxRate: 0, validUntil: iso(-2) });
+  check("an expired quote can't be accepted", !(await act(shop, expired.data.id, { action: "ACCEPT" })).ok);
 
-  // ------------------------------------------------------------------ 7. Finance invoices
-  section("Workflow 7: Finance invoices");
-  res = await look(finance, `/wholesale/${orderId}`, "Change the price");
-  check("change-the-price form keeps the ready date already sent", res.html.includes(`value="${iso(2)}"`));
-  r = await finance.json("POST", `/api/consignments/${orderId}/invoice`, { dueOn: iso(30), amountPaid: 0, terms: "Payment within 30 days" });
-  check("Finance issues the invoice", r.status === 200 && r.data.invoiceNo, `${r.status}`);
-  const invoiceNo = r.data.invoiceNo as string;
-  await look(finance, "/wholesale/payments", invoiceNo);
-  res = await look(pharmacy, `/documents/${orderId}/invoice`, invoiceNo);
-  check("client's invoice shows the bank account to pay into", visibleText(res.html).includes("0123456789012"));
+  section("Customers and suppliers off Parallax");
+  const contact = await whole.json("POST", "/api/contacts", { role: "CUSTOMER", kind: "CLIENT", name: "Kasama Mission Hospital", town: "Kasama", phone: "0212 000 111" });
+  check("wholesaler adds a private customer", contact.status === 201);
+  const rawContact = await db.$queryRawUnsafe<{ phone: string }[]>(`SELECT phone FROM "Contact" LIMIT 1`);
+  check("contact details are stored encrypted", rawContact[0].phone.startsWith("enc:1:"));
+  const ownPcm = await db.product.findFirstOrThrow({ where: { orgId: W, sku: "K-PCM" } });
+  const off = await whole.json("POST", "/api/trade/orders", { side: "seller", contactId: contact.data.id, lines: [{ productId: ownPcm.id, quantity: 10 }] });
+  check("wholesaler starts a quotation for them", off.status === 201, JSON.stringify(off.data));
+  const offId = off.data.id as string;
+  const offLine = await db.tradeOrderItem.findFirstOrThrow({ where: { orderId: offId } });
+  check("own item's price is filled in", offLine.unitPrice === 40);
+  check("quote", (await act(whole, offId, { action: "QUOTE", lines: [{ id: offLine.id, unitPrice: 45 }], taxRate: 0 })).ok);
+  const quoteDoc = await whole.page(`/documents/${offId}/quotation`);
+  check("the quotation prints with the customer's name", quoteDoc.status === 200 && quoteDoc.html.includes("Kasama Mission Hospital"));
+  check("wholesaler records their acceptance", (await act(whole, offId, { action: "ACCEPT" })).ok);
+  check("…dispatches", (await act(whole, offId, { action: "DISPATCH", lines: [{ id: offLine.id, qtyDispatched: 10 }] })).ok);
+  check("…and records delivery", (await act(whole, offId, { action: "RECEIVE", lines: [{ id: offLine.id, qtyReceived: 10 }] })).ok);
+  const supplier = await clinic.json("POST", "/api/contacts", { role: "SUPPLIER", kind: "WHOLESALER", name: "Northern Medical (paper)" });
+  const paperInq = await clinic.json("POST", "/api/trade/orders", { side: "buyer", contactId: supplier.data.id, lines: [{ name: "Syringes 5 ml", unit: "box of 100", quantity: 4 }] });
+  check("client writes an inquiry to a supplier off Parallax", paperInq.status === 201);
+  check("…and downloads it", (await clinic.page(`/documents/${paperInq.data.id}/inquiry`)).html.includes("Syringes 5 ml"));
 
-  // ------------------------------------------------------------------ 8. Sales fulfils
-  section("Workflow 8: Sales prepares, issues the delivery note and dispatches");
-  const amxBefore = await onHand("AMX-500");
-  const glvBefore = await onHand("GLV-M");
-  check("Sales starts preparing", (await sales.json("POST", `/api/consignments/${orderId}/status`, { status: "PREPARING" })).status === 200);
-  await look(sales, `/wholesale/${orderId}`, "Issue delivery note");
-  r = await sales.json("POST", `/api/consignments/${orderId}/delivery`, { lines: lines.map((l) => ({ id: l.id, qtyDelivered: l.product.sku === "GLV-M" ? 8 : l.quantity, remarks: l.product.sku === "GLV-M" ? "2 boxes to follow" : "" })), deliveryMethod: "Company van", vehicleDriver: "ABZ 1234 · J. Phiri", dispatchFrom: "Main warehouse" });
-  check("Sales issues the delivery note (8 of 10 gloves)", r.status === 200 && r.data.deliveryNoteNo, `${r.status}`);
-  check("Sales marks the order ready", (await sales.json("POST", `/api/consignments/${orderId}/status`, { status: "READY" })).status === 200);
-  check("stock is untouched until dispatch", (await onHand("AMX-500")) === amxBefore && (await onHand("GLV-M")) === glvBefore);
-  check("Sales dispatches", (await sales.json("POST", `/api/consignments/${orderId}/status`, { status: "DISPATCHED" })).status === 200);
-  check("dispatch takes the delivered quantities off stock", (await onHand("AMX-500")) === amxBefore - 40 && (await onHand("GLV-M")) === glvBefore - 8, `AMX ${amxBefore}→${await onHand("AMX-500")}, GLV ${glvBefore}→${await onHand("GLV-M")}`);
-  check("delivery note is locked after dispatch", (await sales.json("POST", `/api/consignments/${orderId}/delivery`, { lines: lines.map((l) => ({ id: l.id, qtyDelivered: 1 })), deliveryMethod: "Van" })).status === 400);
-  await look(pharmacy, `/documents/${orderId}/delivery`, "2 boxes to follow");
-  check("Sales marks it delivered", (await sales.json("POST", `/api/consignments/${orderId}/status`, { status: "DELIVERED" })).status === 200);
-  await look(pharmacy, `/portal/orders/${orderId}`, "Delivered");
+  section("Retail counter");
+  const patient = await shop.json("POST", "/api/patients", { firstName: "Thandiwe", lastName: "Mbewe", phone: "0977123456", dateOfBirth: "1990-02-03" });
+  check("retailer adds a patient", patient.status === 200);
+  const rawPatient = await db.$queryRawUnsafe<{ phone: string }[]>(`SELECT phone FROM "Patient" LIMIT 1`);
+  check("patient phone is stored encrypted", rawPatient[0].phone.startsWith("enc:1:"));
+  const bPcm = await db.product.findFirstOrThrow({ where: { orgId: R, sku: "B-PCM" } });
+  const sale = await shop.json("POST", "/api/sales", { items: [{ productId: bPcm.id, quantity: 2 }], payment: "CASH" });
+  check("retailer sells at the counter", sale.status === 200, JSON.stringify(sale.data));
+  check("a wholesaler's item can't be sold at the retailer's counter", (await shop.json("POST", "/api/sales", { items: [{ productId: ownPcm.id, quantity: 1 }] })).status === 400);
+  const rx = await shop.json("POST", "/api/prescriptions", { patientId: patient.data.id, prescriber: "Dr Siame", items: [{ productId: bPcm.id, quantity: 1 }] });
+  check("retailer files a prescription", rx.status === 200);
+  check("…and dispenses it", (await shop.json("POST", `/api/prescriptions/${rx.data.id}/dispense`, {})).status === 200);
 
-  // ------------------------------------------------------------------ 9. Finance collects
-  section("Workflow 9: Finance records payment");
-  order = await db.consignment.findUniqueOrThrow({ where: { id: orderId } });
-  check("part payment recorded", (await finance.json("POST", `/api/consignments/${orderId}/invoice`, { dueOn: iso(30), amountPaid: 1000 })).status === 200);
-  await look(pharmacy, `/portal/orders/${orderId}`, /Balance|balance/);
-  check("full payment recorded", (await finance.json("POST", `/api/consignments/${orderId}/invoice`, { dueOn: iso(30), amountPaid: order.quotedAmount })).status === 200);
-  res = await look(finance, "/wholesale/payments?view=all", invoiceNo);
-  await look(finance, "/reports");
-  await look(finance, "/sales");
-  await look(finance, "/inventory");
-  await look(finance, "/audit");
-  check("Finance sees the bank details to edit", (await look(finance, "/settings")).html.includes("Zanaco"));
+  section("Stock take");
+  const pcmStock = (await db.batch.aggregate({ where: { productId: ownPcm.id }, _sum: { quantity: true } }))._sum.quantity ?? 0;
+  const over = await whole.json("POST", "/api/stock-take", { items: [{ productId: ownPcm.id, countedQty: pcmStock + 1 }] });
+  check("a stock take can't count more than is on hand", over.status === 400, String(over.status));
+  const take = await whole.json("POST", "/api/stock-take", { items: [{ productId: ownPcm.id, countedQty: Math.max(pcmStock - 1, 0) }] });
+  check("wholesaler finishes a stock take", take.status === 200, JSON.stringify(take.data));
+  const takePage = await whole.page(`/stock-take/${take.data.id}`);
+  check("stock take report opens", takePage.status === 200);
 
-  // ------------------------------------------------------------------ 10. Retail counter
-  section("Workflow 10: Sales at the counter");
-  r = await sales.json("POST", "/api/patients", { firstName: "Joseph", lastName: "Mwale", phone: "+260 966 000111", allergies: "Penicillin" });
-  const patientId = r.data.id as string;
-  check("Sales adds a patient", r.status === 200 && patientId);
-  await look(sales, "/patients", "Mwale");
-  const mor = await db.product.findUniqueOrThrow({ where: { sku: "MOR-10" } });
-  r = await sales.json("POST", "/api/prescriptions", { patientId, prescriber: "Dr K. Banda", clinic: "UTH", items: [{ productId: mor.id, quantity: 2, instructions: "One at night" }] });
-  check("Sales records a prescription", r.status === 200, `${r.status} ${JSON.stringify(r.data)}`);
-  const rx = await db.prescription.findFirstOrThrow({ where: { patientId } });
-  const morBefore = await onHand("MOR-10");
-  check("Sales dispenses it", (await sales.json("POST", `/api/prescriptions/${rx.id}/dispense`, {})).status === 200);
-  check("dispensing takes stock off", (await onHand("MOR-10")) === morBefore - 2);
-  await look(sales, "/prescriptions", "Dispensed");
-  const pcm = await db.product.findUniqueOrThrow({ where: { sku: "PCM-500" } });
-  const pcmBefore = await onHand("PCM-500");
-  r = await sales.json("POST", "/api/sales", { payment: "MOBILE", items: [{ productId: pcm.id, quantity: 3 }] });
-  check("Sales rings up a counter sale", r.status === 200 && (await onHand("PCM-500")) === pcmBefore - 3, `${r.status}`);
-  await look(sales, `/documents/sales/${r.data.id}`, "Paracetamol");
-  await look(sales, "/pos");
-  await look(sales, "/sales");
+  section("Subscription lapse");
+  await db.subscription.update({ where: { orgId: W }, data: { periodEnd: new Date(Date.now() - 20 * 86_400_000), trialEndsAt: null } });
+  const ro = await whole.json("POST", "/api/contacts", { role: "CUSTOMER", kind: "CLIENT", name: "Blocked" });
+  check("a lapsed wholesaler is read-only", ro.status === 403, String(ro.status));
+  check("…but can still read its pages", (await whole.page("/orders")).status === 200);
+  check("…and shows the read-only notice", (await whole.page("/dashboard")).html.includes("read-only"));
+  const freeClient = await clinic.json("POST", "/api/contacts", { role: "SUPPLIER", kind: "WHOLESALER", name: "Still free" });
+  check("a client never lapses (free)", freeClient.status === 201);
+  const renew = await team.json("POST", `/api/admin/businesses/${W}/subscription`, { amount: 1200, paidOn: iso(0), months: 12, reference: "ZAN-SUB-1" });
+  check("team records a subscription payment", renew.status === 200, JSON.stringify(renew.data));
+  check("the wholesaler can write again", (await whole.json("POST", "/api/contacts", { role: "CUSTOMER", kind: "CLIENT", name: "Unblocked" })).status === 201);
+  check("clients have nothing to pay", (await team.json("POST", `/api/admin/businesses/${C}/subscription`, { amount: 1, paidOn: iso(0), months: 1 })).status === 400);
 
-  // ------------------------------------------------------------------ 11. Stock take
-  section("Workflow 11: Sales counts stock");
-  await look(sales, "/stock-take");
-  const counted = (await onHand("GLV-M")) - 3;
-  r = await sales.json("POST", "/api/stock-take", { notes: "Month-end count", applyAdjustments: true, items: [{ productId: gloves.id, countedQty: counted }] });
-  check("Sales finishes a stock take with one short item", r.status === 200 && (await onHand("GLV-M")) === counted, `${r.status}`);
-  await look(sales, `/stock-take/${r.data.id}`, "Examination gloves");
-  check("stock take report downloads", (await sales.req("GET", `/api/stock-take/${r.data.id}/report?show=moved`)).status === 200);
-
-  // ------------------------------------------------------------------ 12. Admin reviews
-  section("Workflow 12: admin reviews the day");
-  for (const url of ["/dashboard", "/wholesale", "/wholesale/payments", "/reports", "/inventory", "/sales", "/purchases", "/settings", "/demo-requests"]) await look(owner, url);
-  res = await look(owner, "/audit");
-  const actions = new Set((await db.auditLog.findMany({ select: { action: true } })).map((a) => a.action));
-  for (const action of ["PO_SENT", "PO_QUOTED", "PO_INVOICED", "PO_DISPATCHED", "PO_RECEIVED", "PO_PAYMENT", "WHOLESALE_SET_UP", "STAFF_CREATED", "BUYER_ACCOUNT_CREATED", "ACCOUNT_CREATED", "CONSIGNMENT_QUOTED", "CONSIGNMENT_STATUS", "INVOICE_ISSUED", "PAYMENT_RECORDED", "DELIVERY_NOTE_ISSUED", "SALE_COMPLETED", "RX_DISPENSED", "STOCK_TAKE"]) {
-    check(`activity log records ${action}`, actions.has(action), [...actions].join(", "));
-  }
-  for (const [who, client] of [["Hospital", hospital], ["Client", pharmacy]] as const) {
-    for (const url of ["/portal", "/portal/new"]) await look(client, url);
-    void who;
+  section("Logs and wording");
+  check("wholesaler's activity log has its own actions", (await whole.page("/audit")).html.includes("Order"));
+  const teamActivity = await team.page("/admin/activity");
+  check("team activity lists its actions", teamActivity.html.includes("business created") && teamActivity.html.includes("subscription paid"));
+  const otherLog = await db.auditLog.findMany({ where: { orgId: W, action: { startsWith: "LOGIN_" } } });
+  check("team actions are not in a business's own log", otherLog.length === 0);
+  const pages: [Client, string][] = [
+    [whole, "/dashboard"],
+    [whole, "/orders"],
+    [whole, `/orders/${rOrder}`],
+    [whole, "/customers"],
+    [whole, "/payments"],
+    [shop, `/purchases/${rOrder}`],
+    [shop, "/suppliers"],
+    [clinic, `/purchases/${cOrder}`],
+    [maker, "/items"],
+    [maker, `/orders/${po}`],
+    [team, "/admin/businesses"],
+  ];
+  for (const [client, path] of pages) {
+    const page = await client.page(path);
+    check(`${client.label} ${path} opens`, page.status === 200, `${page.status} ${page.path}`);
+    scanLabels(client.label, path, page.html, [/\bconsignment/gi, /\bbuyer portal\b/gi]);
   }
 }

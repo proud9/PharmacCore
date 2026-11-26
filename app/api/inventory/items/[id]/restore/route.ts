@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { canAdjustStock, requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { apiTenant } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 
 /** Restores an item from the delete queue, with its stock as it was. */
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
-  if (!user || !canAdjustStock(user.role)) {
-    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
-  }
+  const auth = await apiTenant("catalog");
+  if (!auth.ok) return auth.response;
+  const { t } = auth;
+  const { db } = t;
   const { id } = await params;
   const product = await db.product.findUnique({ where: { id } });
   if (!product || !product.deletedAt || product.purgedAt) {
@@ -18,8 +17,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     where: { id },
     data: { active: true, deletedAt: null, deleteReason: null, deletedByName: null },
   });
-  await audit({
-    userId: user.id,
+  await audit(t, {
     action: "ITEM_RESTORED",
     entity: "Product",
     entityId: id,

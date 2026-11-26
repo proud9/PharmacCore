@@ -3,12 +3,15 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import { Eye, EyeOff } from "lucide-react";
+import { KIND_HINT, ORG_KINDS, ROLE_LABEL, type OrgKind } from "@/lib/capabilities";
 
 type Mode = "login" | "register";
 
 type AccountFormProps = {
   allowRegistration?: boolean;
   initialMode?: Mode;
+  /** Preselected account type for sign-up (from /signup?type=…). */
+  initialKind?: OrgKind;
 };
 
 /** Hash links elsewhere on the page pick the tab: #sign-in or #create-account. */
@@ -16,7 +19,8 @@ const HASH_MODE: Record<string, Mode> = { "#sign-in": "login", "#create-account"
 
 const labelClass = "mb-1.5 block text-[15px] font-semibold normal-case tracking-normal text-ink";
 
-export default function AccountForm({ allowRegistration = false, initialMode = "login" }: AccountFormProps) {
+export default function AccountForm({ allowRegistration = false, initialMode = "login", initialKind = "RETAILER" }: AccountFormProps) {
+  const [kind, setKind] = useState<OrgKind>(initialKind);
   const [mode, setMode] = useState<Mode>(initialMode);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -50,11 +54,14 @@ export default function AccountForm({ allowRegistration = false, initialMode = "
     const form = new FormData(event.currentTarget);
     const body = isRegistration
       ? {
-          name: form.get("name"),
-          institutionName: form.get("institutionName"),
           kind: form.get("kind"),
+          businessName: form.get("businessName"),
+          town: form.get("town"),
+          phone: form.get("phone"),
+          name: form.get("name"),
           email: form.get("email"),
           password: form.get("password"),
+          website: form.get("website") ?? "",
         }
       : {
           email: form.get("email"),
@@ -80,7 +87,7 @@ export default function AccountForm({ allowRegistration = false, initialMode = "
       const requestedPath = new URLSearchParams(window.location.search).get("next");
       const safePath = requestedPath?.startsWith("/") && !requestedPath.startsWith("//") ? requestedPath : null;
       // Full load on sign-in: starts with an empty client page cache for this user.
-      window.location.assign(safePath ?? data.home ?? (isRegistration ? "/portal" : "/dashboard"));
+      window.location.assign(safePath ?? data.home ?? "/dashboard");
     } catch {
       setError("Unable to reach Parallax. Check your connection and try again.");
     } finally {
@@ -124,30 +131,41 @@ export default function AccountForm({ allowRegistration = false, initialMode = "
           {isRegistration ? (
             <>
               <div>
-                <label htmlFor="institution-kind" className={labelClass}>
-                  Organisation type
+                <label htmlFor="org-kind" className={labelClass}>
+                  Account type
                 </label>
-                <select id="institution-kind" name="kind" required defaultValue="PHARMACY">
-                  <option value="PHARMACY">Pharmacy</option>
-                  <option value="HOSPITAL">Hospital</option>
-                  <option value="CLINIC">Clinic</option>
-                  <option value="SCHOOL">School</option>
+                <select id="org-kind" name="kind" required value={kind} onChange={(event) => setKind(event.target.value as OrgKind)}>
+                  {ORG_KINDS.map((value) => (
+                    <option key={value} value={value}>
+                      {ROLE_LABEL[value]}
+                    </option>
+                  ))}
                 </select>
+                <p className="mt-1.5 text-sm text-foil">
+                  {KIND_HINT[kind]} {kind === "CLIENT" ? "Free to use." : "Free for 30 days, then a subscription."}
+                </p>
               </div>
               <div>
-                <label htmlFor="institution-name" className={labelClass}>
-                  Organisation name
+                <label htmlFor="business-name" className={labelClass}>
+                  Business name
                 </label>
-                <input
-                  id="institution-name"
-                  name="institutionName"
-                  type="text"
-                  required
-                  minLength={2}
-                  maxLength={150}
-                  autoComplete="organization"
-                />
+                <input id="business-name" name="businessName" type="text" required minLength={2} maxLength={150} autoComplete="organization" />
               </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="business-town" className={labelClass}>
+                    Town
+                  </label>
+                  <input id="business-town" name="town" type="text" maxLength={80} autoComplete="address-level2" />
+                </div>
+                <div>
+                  <label htmlFor="business-phone" className={labelClass}>
+                    Phone
+                  </label>
+                  <input id="business-phone" name="phone" type="tel" maxLength={40} autoComplete="tel" />
+                </div>
+              </div>
+              <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
               <div>
                 <label htmlFor="account-name" className={labelClass}>
                   Your name
@@ -173,7 +191,7 @@ export default function AccountForm({ allowRegistration = false, initialMode = "
                 name="password"
                 type={showPassword ? "text" : "password"}
                 required
-                minLength={isRegistration ? 8 : 6}
+                minLength={isRegistration ? 10 : 1}
                 maxLength={isRegistration ? 72 : undefined}
                 autoComplete={isRegistration ? "new-password" : "current-password"}
                 className="pr-10"
@@ -188,7 +206,7 @@ export default function AccountForm({ allowRegistration = false, initialMode = "
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-            {isRegistration ? <p className="mt-1.5 text-sm text-foil">At least 8 characters.</p> : null}
+            {isRegistration ? <p className="mt-1.5 text-sm text-foil">At least 10 characters.</p> : null}
           </div>
         </div>
 

@@ -5,7 +5,7 @@ export function Badge({
   tone = "neutral",
 }: {
   children: React.ReactNode;
-  tone?: "neutral" | "good" | "warn" | "bad" | "brass";
+  tone?: "neutral" | "good" | "warn" | "bad" | "brass" | "info";
 }) {
   return (
     <span
@@ -16,6 +16,7 @@ export function Badge({
         tone === "warn" && "bg-amber-100 text-amber-800",
         tone === "bad" && "bg-rose-100 text-rose-800",
         tone === "brass" && "bg-brass/20 text-pine-900",
+        tone === "info" && "bg-dispensary-soft text-dispensary",
       )}
     >
       {children}

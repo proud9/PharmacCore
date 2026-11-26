@@ -1,6 +1,6 @@
 import { addDays, differenceInCalendarDays, subDays } from "date-fns";
-import { db } from "./db";
 import { audit } from "./audit";
+import type { Tenant } from "./tenant";
 
 /**
  * Inventory delete queue. Deleting an item hides it (active = false, deletedAt set) and keeps
@@ -21,7 +21,8 @@ export function daysLeft(deletedAt: Date, now = new Date()) {
 }
 
 /** Permanently deletes queue items older than RETENTION_DAYS. Safe to call on every page load. */
-export async function purgeExpiredDeletions(now = new Date()) {
+export async function purgeExpiredDeletions(t: Tenant, now = new Date()) {
+  const { db } = t;
   const due = await db.product.findMany({
     where: { deletedAt: { lte: subDays(now, RETENTION_DAYS) }, purgedAt: null },
     include: {
@@ -29,9 +30,7 @@ export async function purgeExpiredDeletions(now = new Date()) {
         select: {
           saleItems: true,
           prescriptionItems: true,
-          purchaseItems: true,
           stockTakeItems: true,
-          consignmentItems: true,
           intakes: true,
         },
       },
@@ -40,7 +39,7 @@ export async function purgeExpiredDeletions(now = new Date()) {
 
   for (const product of due) {
     const hasHistory = Object.values(product._count).some((count) => count > 0);
-    await db.$transaction(async (tx) => {
+    await t.tx(async (tx) => {
       await tx.batch.deleteMany({ where: { productId: product.id } });
       if (hasHistory) {
         await tx.product.update({
@@ -51,7 +50,7 @@ export async function purgeExpiredDeletions(now = new Date()) {
         await tx.product.delete({ where: { id: product.id } });
       }
     });
-    await audit({
+    await audit(t, {
       action: "ITEM_PURGED",
       entity: "Product",
       entityId: hasHistory ? product.id : undefined,

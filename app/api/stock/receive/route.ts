@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canAdjustStock, requireUser } from "@/lib/auth";
+import { apiTenant } from "@/lib/tenant";
 import { receiveBatch } from "@/lib/inventory";
 import { audit } from "@/lib/audit";
 
@@ -12,22 +12,25 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const user = await requireUser();
-  if (!user || !canAdjustStock(user.role)) {
-    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
-  }
+  const auth = await apiTenant("inventory");
+  if (!auth.ok) return auth.response;
+  const { t } = auth;
+  const { db } = t;
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Batch details are incomplete." }, { status: 400 });
   }
-  await receiveBatch({
+  if ((await db.product.count({ where: { id: parsed.data.productId, active: true } })) === 0) {
+    return NextResponse.json({ error: "Item not found." }, { status: 404 });
+  }
+  await receiveBatch(db, {
+    orgId: t.org.id,
     productId: parsed.data.productId,
     lotNumber: parsed.data.lotNumber,
     expiryDate: new Date(parsed.data.expiryDate),
     quantity: parsed.data.quantity,
   });
-  await audit({
-    userId: user.id,
+  await audit(t, {
     action: "STOCK_RECEIVED",
     entity: "Product",
     entityId: parsed.data.productId,

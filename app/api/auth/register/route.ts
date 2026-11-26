@@ -1,61 +1,62 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { addDays } from "date-fns";
 import { z } from "zod";
-import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
-import { setSessionCookie, signSession } from "@/lib/auth";
-import { homePath } from "@/lib/paths";
-import { isSetUp } from "@/lib/setup";
-import { INSTITUTION_KINDS } from "@/lib/wholesale";
-import type { Role } from "@/lib/utils";
+import { PASSWORD_MIN, startSession } from "@/lib/auth";
+import { ORG_KINDS, homePath } from "@/lib/capabilities";
+import { TRIAL_DAYS, pays } from "@/lib/subscription";
 
+/** PUBLIC: a business signs up. Creates the business, its one login and (if it pays) a trial. */
 const schema = z.object({
-  name: z.string().trim().min(2).max(100),
-  institutionName: z.string().trim().min(2).max(150),
-  kind: z.enum(INSTITUTION_KINDS),
-  email: z.string().trim().email().max(254).transform((email) => email.toLowerCase()),
-  password: z.string().min(8),
+  kind: z.enum(ORG_KINDS),
+  businessName: z.string().trim().min(2, "Enter the business name.").max(150),
+  town: z.string().trim().max(80).optional(),
+  phone: z.string().trim().max(40).optional(),
+  name: z.string().trim().min(2, "Enter your name.").max(100),
+  email: z.string().trim().email("Enter a valid email.").max(254).transform((email) => email.toLowerCase()),
+  password: z.string().min(PASSWORD_MIN, `Passwords need at least ${PASSWORD_MIN} characters.`),
+  website: z.string().max(0).optional(), // honeypot: people leave it empty
 });
 
 export async function POST(request: Request) {
-  // Customers order from this installation's wholesale, so sign-up waits until one is set up.
-  if (!(await isSetUp())) {
-    return NextResponse.json({ error: "Customer accounts open once the wholesale has finished setting up." }, { status: 409 });
-  }
-  const body = await request.json().catch(() => null);
-  const parsed = schema.safeParse(body);
+  const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Enter valid account, organization, email, and password details." }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Check the form." }, { status: 400 });
   }
-  if (Buffer.byteLength(parsed.data.password, "utf8") > 72) {
+  const data = parsed.data;
+  if (Buffer.byteLength(data.password, "utf8") > 72) {
     return NextResponse.json({ error: "Password must be no more than 72 bytes." }, { status: 400 });
   }
 
   let user;
   try {
-    user = await db.user.create({
-      data: {
-        name: parsed.data.name,
-        email: parsed.data.email,
-        passwordHash: await bcrypt.hash(parsed.data.password, 10),
-        role: "BUYER",
-        institution: {
-          create: {
-            name: parsed.data.institutionName,
-            kind: parsed.data.kind,
-            contact: parsed.data.name,
-            email: parsed.data.email,
-          },
+    user = await db.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: {
+          kind: data.kind,
+          name: data.businessName,
+          town: data.town || null,
+          phone: data.phone || null,
+          email: data.email,
+          // Clients aren't listed: sellers don't need to find them; they ask to connect.
+          listed: data.kind !== "CLIENT",
         },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        institutionId: true,
-      },
+      });
+      if (pays(data.kind)) {
+        const end = addDays(new Date(), TRIAL_DAYS);
+        await tx.subscription.create({ data: { orgId: org.id, plan: "TRIAL", trialEndsAt: end, periodEnd: end } });
+      }
+      return tx.user.create({
+        data: {
+          name: data.name,
+          email: data.email,
+          passwordHash: await bcrypt.hash(data.password, 10),
+          role: data.kind,
+          orgId: org.id,
+        },
+      });
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -64,20 +65,6 @@ export async function POST(request: Request) {
     throw error;
   }
 
-  await audit({
-    userId: user.id,
-    action: "ACCOUNT_CREATED",
-    entity: "User",
-    entityId: user.id,
-  });
-  const token = await signSession({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role as Role,
-    institutionId: user.institutionId,
-  });
-  await setSessionCookie(token);
-
+  await startSession(user);
   return NextResponse.json({ ok: true, home: homePath(user.role) }, { status: 201 });
 }

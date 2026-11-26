@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { format } from "date-fns";
-import { canAdjustStock, requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { apiTenant } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 import { setStockLevel } from "@/lib/inventory";
 import { editItemSchema, firstIssue, parseExpiry } from "@/lib/stocksheet";
@@ -11,10 +10,10 @@ import { editItemSchema, firstIssue, parseExpiry } from "@/lib/stocksheet";
  * and its current stock on hand. A stock change is applied to the batches and logged.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
-  if (!user || !canAdjustStock(user.role)) {
-    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
-  }
+  const auth = await apiTenant("inventory");
+  if (!auth.ok) return auth.response;
+  const { t } = auth;
+  const { db } = t;
   const parsed = editItemSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: firstIssue(parsed.error) }, { status: 400 });
@@ -24,13 +23,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const product = await db.product.findUnique({ where: { id } });
   if (!product || product.deletedAt) return NextResponse.json({ error: "Item not found." }, { status: 404 });
-  const clash = await db.product.findUnique({ where: { sku: data.stockCode } });
+  const clash = await db.product.findFirst({ where: { sku: data.stockCode } });
   if (clash && clash.id !== id) {
     return NextResponse.json({ error: `Stock code ${data.stockCode} already belongs to ${clash.name}.` }, { status: 400 });
   }
 
   try {
-    const { previous: before, batchChange } = await db.$transaction(async (tx) => {
+    const { previous: before, batchChange } = await t.tx(async (tx) => {
       await tx.product.update({
         where: { id },
         data: {
@@ -71,6 +70,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const batchChange = changes.length ? changes.join(", ") : null;
       const previous = await setStockLevel(
         tx,
+        t.org.id,
         id,
         data.currentStock,
         data.expiry ? parseExpiry(data.expiry) : null,
@@ -80,8 +80,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return { previous, batchChange };
     });
 
-    await audit({
-      userId: user.id,
+    await audit(t, {
       action: before === data.currentStock ? "PRODUCT_UPDATED" : "STOCK_ADJUSTED",
       entity: "Product",
       entityId: id,

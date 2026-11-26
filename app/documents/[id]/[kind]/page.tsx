@@ -1,46 +1,79 @@
 import { notFound } from "next/navigation";
+import { getTenant } from "@/lib/tenant";
+import { db as platform } from "@/lib/db";
+import { loadOrder } from "@/lib/trade-server";
 import { DocumentFrame } from "@/components/documents/DocumentFrame";
-import { TradeDocument } from "@/components/documents/TradeDocument";
-import { isStaff, isBuyer, requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { getPharmacy } from "@/lib/pharmacy";
-import { DELIVERY_STATUSES, QUOTE_STATUSES } from "@/lib/documents";
+import { TradeDocument, type DocKind, type Party } from "@/components/documents/TradeDocument";
 
-const KINDS = ["quotation", "invoice", "delivery"] as const;
-type Kind = (typeof KINDS)[number];
+const KINDS: DocKind[] = ["inquiry", "quotation", "purchase-order", "invoice", "delivery-note"];
 
-export default async function DocumentPage({ params }: { params: Promise<{ id: string; kind: string }> }) {
-  const user = await requireUser();
-  if (!user) notFound();
+const PARTY_SELECT = {
+  id: true,
+  name: true,
+  phone: true,
+  email: true,
+  address: true,
+  website: true,
+  tpin: true,
+  licenceNo: true,
+  logoPath: true,
+  bankName: true,
+  accountName: true,
+  accountNumber: true,
+  bankBranch: true,
+  swiftCode: true,
+} as const;
+
+/** Printable order documents. Only the two businesses on the order can open them. */
+export default async function TradeDocumentPage({ params }: { params: Promise<{ id: string; kind: string }> }) {
+  const t = await getTenant();
+  if (!t) notFound();
   const { id, kind } = await params;
-  if (!KINDS.includes(kind as Kind)) notFound();
-  const documentKind = kind as Kind;
+  if (!KINDS.includes(kind as DocKind)) notFound();
+  const loaded = await loadOrder(t, id);
+  if (!loaded) notFound();
+  const { order, side } = loaded;
 
-  const order = await db.consignment.findUnique({
-    where: { id },
-    include: {
-      institution: true,
-      requestedBy: true,
-      quotedBy: true,
-      items: { include: { product: true } },
-    },
-  });
-  if (!order) notFound();
-  if (isBuyer(user.role) && order.institutionId !== user.institutionId) notFound();
-  if (!isBuyer(user.role) && !isStaff(user.role)) notFound();
+  const docKind = kind as DocKind;
+  const available =
+    docKind === "inquiry" ||
+    (docKind === "quotation" && !!order.quoteNo) ||
+    (docKind === "purchase-order" && !!order.poNumber) ||
+    (docKind === "invoice" && !!order.invoicedAt) ||
+    (docKind === "delivery-note" && !!order.dispatchedAt);
+  if (!available) notFound();
 
-  if (documentKind === "quotation" && !QUOTE_STATUSES.includes(order.status)) notFound();
-  if (documentKind === "invoice" && !order.invoiceNo) notFound();
-  if (documentKind === "delivery" && (!order.deliveryNoteNo || !DELIVERY_STATUSES.includes(order.status))) notFound();
-
-  const pharmacy = await getPharmacy();
-  if (!pharmacy) notFound();
-
-  const back = isBuyer(user.role) ? `/portal/orders/${order.id}` : `/wholesale/${order.id}`;
+  async function party(orgId: string | null, contactId: string | null, name: string): Promise<Party> {
+    if (orgId) {
+      const org = await platform.organization.findUnique({ where: { id: orgId }, select: PARTY_SELECT });
+      if (org) return org;
+    }
+    // A private contact belongs to the business that created the order (which is reading it).
+    const contact = contactId ? await t!.db.contact.findFirst({ where: { id: contactId } }) : null;
+    return {
+      name: contact?.name ?? name,
+      phone: contact?.phone ?? null,
+      email: contact?.email ?? null,
+      address: contact?.address ?? null,
+      website: null,
+      tpin: contact?.tpin ?? null,
+      licenceNo: null,
+      logoPath: null,
+      bankName: null,
+      accountName: null,
+      accountNumber: null,
+      bankBranch: null,
+      swiftCode: null,
+    };
+  }
+  const [seller, buyer] = await Promise.all([
+    party(order.sellerOrgId, order.sellerContactId, order.sellerName),
+    party(order.buyerOrgId, order.buyerContactId, order.buyerName),
+  ]);
 
   return (
-    <DocumentFrame back={back}>
-      <TradeDocument kind={documentKind} pharmacy={pharmacy} order={order} />
+    <DocumentFrame back={side === "seller" ? `/orders/${order.id}` : `/purchases/${order.id}`}>
+      <TradeDocument kind={docKind} seller={seller} buyer={buyer} order={order} />
     </DocumentFrame>
   );
 }

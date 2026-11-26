@@ -1,11 +1,10 @@
+import { pageTenant } from "@/lib/tenant";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import { format, isBefore } from "date-fns";
-import { db } from "@/lib/db";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/Badge";
 import { StockSheet, type SheetRow } from "@/components/stock/StockSheet";
-import { canAdjustStock, requireUser } from "@/lib/auth";
 import { drugTypeOf } from "@/lib/stocksheet";
 import { money, stockOf } from "@/lib/utils";
 import { Pagination } from "@/components/Pagination";
@@ -13,6 +12,8 @@ import { paging, searchText, type ListParams } from "@/lib/paging";
 import { Prisma } from "@prisma/client";
 
 export default async function StockTakePage({ searchParams }: { searchParams: Promise<ListParams> }) {
+  const t = await pageTenant("inventory");
+  const { db } = t;
   const params = await searchParams;
   const { page, take, skip, pageSize } = paging(params);
   const q = searchText(params);
@@ -20,10 +21,9 @@ export default async function StockTakePage({ searchParams }: { searchParams: Pr
   const where: Prisma.ProductWhereInput = {
     active: true,
     ...(type ? { controlled: type === "DDA" } : {}),
-    ...(q ? { OR: [{ sku: { contains: q } }, { name: { contains: q } }, { categoryNo: { contains: q } }] } : {}),
+    ...(q ? { OR: [{ sku: { contains: q, mode: "insensitive" } }, { name: { contains: q, mode: "insensitive" } }, { categoryNo: { contains: q, mode: "insensitive" } }] } : {}),
   };
-  const [user, products, total, history] = await Promise.all([
-    requireUser(),
+  const [products, total, history] = await Promise.all([
     db.product.findMany({
       where,
       include: { batches: { where: { quantity: { gt: 0 } }, orderBy: { expiryDate: "asc" } } },
@@ -33,21 +33,23 @@ export default async function StockTakePage({ searchParams }: { searchParams: Pr
     }),
     db.product.count({ where }),
     db.stockTake.findMany({
-      select: { id: true, reference: true, status: true, startedAt: true, user: { select: { name: true } } },
+      select: { id: true, reference: true, status: true, startedAt: true, userName: true },
       orderBy: { startedAt: "desc" },
       take: 8,
     }),
   ]);
   // Line counts and sold amounts for recent takes, totalled in the database (a take has a line per item).
   const summaries = history.length
-    ? await db.$queryRaw<{ stockTakeId: string; lines: bigint | number; amount: number | null }[]>(Prisma.sql`
-        SELECT stockTakeId, COUNT(*) AS lines, SUM((systemQty - countedQty) * unitPrice) AS amount
-        FROM StockTakeItem
-        WHERE stockTakeId IN (${Prisma.join(history.map((h) => h.id))})
-        GROUP BY stockTakeId`)
+    ? await t.tx((tx) =>
+        tx.$queryRaw<{ stockTakeId: string; lines: bigint | number; amount: number | null }[]>(Prisma.sql`
+          SELECT "stockTakeId", COUNT(*) AS lines, SUM(("systemQty" - "countedQty") * "unitPrice") AS amount
+          FROM "StockTakeItem"
+          WHERE "stockTakeId" IN (${Prisma.join(history.map((h) => h.id))})
+          GROUP BY "stockTakeId"`),
+      )
     : [];
   const summaryById = new Map(summaries.map((s) => [s.stockTakeId, { lines: Number(s.lines), amount: Number(s.amount ?? 0) }]));
-  const canEdit = Boolean(user && canAdjustStock(user.role));
+  const canEdit = !t.readOnly;
   const today = new Date();
 
   const rows: SheetRow[] = products.map((p) => {
@@ -101,7 +103,7 @@ export default async function StockTakePage({ searchParams }: { searchParams: Pr
                 return (
                   <tr key={row.id}>
                     <td className="font-mono text-xs">{row.reference}</td>
-                    <td>{row.user.name}</td>
+                    <td>{row.userName}</td>
                     <td>{format(row.startedAt, "dd MMM yyyy HH:mm")}</td>
                     <td>{summary.lines.toLocaleString()}</td>
                     <td className="text-right tabular-nums">{money(amount)}</td>

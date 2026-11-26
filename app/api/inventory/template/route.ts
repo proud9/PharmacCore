@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { canAdjustStock, requireUser } from "@/lib/auth";
+import { apiTenant } from "@/lib/tenant";
 import { buildItemsTemplate } from "@/lib/xlsx";
 
 /** Downloads the Excel import template (dropdowns match the site form). */
 export async function GET() {
-  const user = await requireUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canAdjustStock(user.role)) return NextResponse.json({ error: "Only sales staff can import items." }, { status: 403 });
+  const auth = await apiTenant("catalog", { write: false });
+  if (!auth.ok) return auth.response;
   const file = await buildItemsTemplate();
   return new NextResponse(new Uint8Array(file), {
     headers: {

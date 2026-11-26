@@ -102,4 +102,11 @@ label {
   @page {
     margin: 12mm;
   }
+
+  /* Keep the pine heading bars and tints on paper. */
+  body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

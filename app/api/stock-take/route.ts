@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { addDays } from "date-fns";
-import { canAdjustStock, requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { apiTenant } from "@/lib/tenant";
 import { audit } from "@/lib/audit";
 import { setStockLevel } from "@/lib/inventory";
 import { ref } from "@/lib/utils";
@@ -27,10 +26,10 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const user = await requireUser();
-  if (!user || !canAdjustStock(user.role)) {
-    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
-  }
+  const auth = await apiTenant("inventory");
+  if (!auth.ok) return auth.response;
+  const { t } = auth;
+  const { user } = t;
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Stock take is incomplete." }, { status: 400 });
@@ -38,7 +37,7 @@ export async function POST(request: Request) {
   const counted = new Map(parsed.data.items.map((item) => [item.productId, item.countedQty]));
 
   try {
-    const take = await db.$transaction(
+    const take = await t.tx(
       async (tx) => {
         const [products, stock] = await Promise.all([
           tx.product.findMany({ where: { active: true }, select: { id: true, sellingPrice: true } }),
@@ -50,6 +49,7 @@ export async function POST(request: Request) {
           const systemQty = onHand.get(product.id) ?? 0;
           const countedQty = counted.get(product.id) ?? systemQty;
           return {
+            orgId: t.org.id,
             productId: product.id,
             systemQty,
             countedQty,
@@ -58,11 +58,17 @@ export async function POST(request: Request) {
           };
         });
         if (lines.length === 0) throw new Error("There are no items to count.");
+        // A count only records what is left; stock is added in Inventory, never by a stock take.
+        if (lines.some((line) => line.countedQty > line.systemQty)) {
+          throw new Error("A close qty is more than the stock on hand. Add the extra stock in Inventory, then count again.");
+        }
 
         const created = await tx.stockTake.create({
           data: {
+            orgId: t.org.id,
             reference: ref("ST"),
             userId: user.id,
+            userName: user.name,
             status: "COMPLETED",
             notes: parsed.data.notes,
             completedAt: new Date(),
@@ -74,7 +80,7 @@ export async function POST(request: Request) {
           for (const line of lines) {
             if (line.variance !== 0) {
               // Items with no batches at all get a one-year placeholder expiry, as before.
-              await setStockLevel(tx, line.productId, line.countedQty, addDays(new Date(), 365));
+              await setStockLevel(tx, t.org.id, line.productId, line.countedQty, addDays(new Date(), 365));
             }
           }
         }
@@ -83,8 +89,7 @@ export async function POST(request: Request) {
       { timeout: 60_000 },
     );
 
-    await audit({
-      userId: user.id,
+    await audit(t, {
       action: "STOCK_TAKE",
       entity: "StockTake",
       entityId: take.id,

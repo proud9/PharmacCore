@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { format } from "date-fns";
-import { isStaff, requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { apiTenant } from "@/lib/tenant";
 import { csvCell, displayCode, drugTypeOf } from "@/lib/stocksheet";
 
 /**
@@ -9,15 +8,16 @@ import { csvCell, displayCode, drugTypeOf } from "@/lib/stocksheet";
  * ?show=moved (default) gives only lines where sold ≠ 0; ?show=all gives every line.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isStaff(user.role)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  const auth = await apiTenant("inventory", { write: false });
+  if (!auth.ok) return auth.response;
+  const { t } = auth;
+  const { db } = t;
 
   const { id } = await params;
   const show = new URL(request.url).searchParams.get("show") === "all" ? "all" : "moved";
   const take = await db.stockTake.findUnique({
     where: { id },
-    include: { user: true, items: { include: { product: true } } },
+    include: { items: { include: { product: true } } },
   });
   if (!take) return NextResponse.json({ error: "Stock take not found." }, { status: 404 });
 
@@ -33,7 +33,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const rows: (string | number | null)[][] = [
     ["Stock take report", take.reference],
-    ["Counted by", take.user.name],
+    ["Counted by", take.userName],
     ["Date", format(when, "dd MMM yyyy HH:mm")],
     ["Lines", show === "all" ? "All lines" : "Items that moved"],
     ...(take.notes ? [["Notes", take.notes]] : []),

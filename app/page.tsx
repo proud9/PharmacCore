@@ -32,7 +32,6 @@ import { DemoRequestDialog } from "@/components/landing/DemoRequestDialog";
 import { LandingNav } from "@/components/landing/LandingNav";
 import { requireUser } from "@/lib/auth";
 import { homePath } from "@/lib/paths";
-import { isSetUp } from "@/lib/setup";
 import { CONTACT, SOCIAL_LINKS } from "@/lib/contact";
 import styles from "./landing.module.css";
 
@@ -58,10 +57,10 @@ const STEPS = [
 
 export default async function Home() {
   // requireUser checks the account still exists and is active, not just the cookie.
-  const [session, setUp] = await Promise.all([requireUser(), isSetUp()]);
+  const session = await requireUser();
+  const setUp = true;
   const year = new Date().getFullYear();
-  // Before a wholesale owns this installation, "Create an account" means setting it up.
-  const createHref = setUp ? "#create-account" : "/setup";
+  const createHref = "#create-account";
 
   return (
     <div className={styles.page}>
@@ -244,7 +243,7 @@ export default async function Home() {
               <div className={styles.setupCard}>
                 <h3>Ready when you are</h3>
                 <p>It takes about five minutes. You can add the logo and bank details later if you don&apos;t have them to hand.</p>
-                <Link className={`${styles.btn} ${styles.btnPrimary}`} href="/setup">
+                <Link className={`${styles.btn} ${styles.btnPrimary}`} href="/signup">
                   Set up your wholesale
                 </Link>
                 <p className={styles.setupAlt}>
