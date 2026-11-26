@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { notFound } from "next/navigation";
 import { DocumentFrame } from "@/components/documents/DocumentFrame";
 import { InvoiceSheet } from "@/components/documents/InvoiceSheet";
+import { counterPaymentLabel } from "@/lib/counter";
 
 export default async function SaleInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const t = await pageTenant("counter");
@@ -43,7 +44,7 @@ export default async function SaleInvoicePage({ params }: { params: Promise<{ id
           quantity: item.quantity,
           unitPrice: item.unitPrice,
         }))}
-        notes={`Paid by ${sale.payment.replaceAll("_", " ")}.`}
+        notes={`Paid by ${counterPaymentLabel(sale.payment).toLowerCase()}.`}
         subtotal={sale.subtotal}
         taxRateLabel={taxRateLabel}
         tax={sale.tax}

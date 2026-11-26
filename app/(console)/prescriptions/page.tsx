@@ -103,7 +103,7 @@ export default async function PrescriptionsPage({ searchParams }: { searchParams
         {allow ? (
           <PrescriptionForm />
         ) : (
-          <p className="text-sm text-ink/60">A pharmacist or administrator must sign in to add prescriptions.</p>
+          <p className="text-sm text-ink/60">Your account is read-only, so you can't add prescriptions.</p>
         )}
       </div>
     </div>

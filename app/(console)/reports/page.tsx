@@ -1,3 +1,4 @@
+import { counterPaymentLabel } from "@/lib/counter";
 import { pageTenant } from "@/lib/tenant";
 import { format, startOfDay, subDays } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
@@ -74,7 +75,7 @@ export default async function ReportsPage() {
             <tbody>
               {Object.entries(tender).map(([method, value]) => (
                 <tr key={method}>
-                  <td>{method}</td>
+                  <td>{counterPaymentLabel(method)}</td>
                   <td>{money(value, currency)}</td>
                   <td>{revenue ? `${((value / revenue) * 100).toFixed(1)}%` : "0%"}</td>
                 </tr>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { money } from "@/lib/utils";
 import { useLookup } from "@/components/search/useLookup";
+import { COUNTER_PAYMENTS, COUNTER_PAYMENT_LABEL } from "@/lib/counter";
 import { LookupPicker, type Picked } from "@/components/search/LookupPicker";
 
 type Product = {
@@ -141,10 +142,11 @@ export function PosDesk({ currency }: { currency: string }) {
           <div>
             <label>Payment</label>
             <select value={payment} onChange={(e) => setPayment(e.target.value)}>
-              <option>CASH</option>
-              <option>CARD</option>
-              <option>MOBILE</option>
-              <option>INSURANCE</option>
+              {COUNTER_PAYMENTS.map((code) => (
+                <option key={code} value={code}>
+                  {COUNTER_PAYMENT_LABEL[code]}
+                </option>
+              ))}
             </select>
           </div>
         </div>

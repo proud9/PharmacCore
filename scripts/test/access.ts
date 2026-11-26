@@ -11,14 +11,14 @@ import { Client, ROOT, check, runScript, section, signedIn } from "./harness";
 
 const PASSWORD = "Parallax2026!";
 
-const PAGES = ["/dashboard", "/orders", "/purchases", "/payments", "/customers", "/suppliers", "/directory", "/items", "/inventory", "/stock-take", "/pos", "/sales", "/patients", "/prescriptions", "/reports", "/audit", "/settings", "/notifications"];
+const PAGES = ["/dashboard", "/orders", "/purchases", "/payments", "/customers", "/suppliers", "/directory", "/items", "/inventory", "/stock-take", "/pos", "/sales", "/patients", "/prescriptions", "/reports", "/audit", "/settings", "/notifications", "/guide"];
 
 /** Pages each type opens; every other page sends it to /dashboard. */
 const ALLOWED: Record<string, string[]> = {
-  MANUFACTURER: ["/dashboard", "/orders", "/payments", "/customers", "/directory", "/items", "/audit", "/settings", "/notifications"],
-  WHOLESALER: ["/dashboard", "/orders", "/purchases", "/payments", "/customers", "/suppliers", "/directory", "/items", "/inventory", "/stock-take", "/audit", "/settings", "/notifications"],
+  MANUFACTURER: ["/dashboard", "/orders", "/payments", "/customers", "/directory", "/items", "/audit", "/settings", "/notifications", "/guide"],
+  WHOLESALER: ["/dashboard", "/orders", "/purchases", "/payments", "/customers", "/suppliers", "/directory", "/items", "/inventory", "/stock-take", "/audit", "/settings", "/notifications", "/guide"],
   RETAILER: PAGES,
-  CLIENT: ["/dashboard", "/purchases", "/payments", "/suppliers", "/directory", "/audit", "/settings", "/notifications"],
+  CLIENT: ["/dashboard", "/purchases", "/payments", "/suppliers", "/directory", "/audit", "/settings", "/notifications", "/guide"],
 };
 
 const TENANT_MODELS = ["category", "product", "batch", "stockIntake", "stockTake", "stockTakeItem", "patient", "prescription", "prescriptionItem", "sale", "saleItem", "auditLog", "contact", "notification", "productLink", "tradeLink", "tradeOrder", "tradeOrderItem", "tradeOrderEvent", "tradePayment"];
@@ -48,10 +48,19 @@ export async function accessSuite(base: string, db: PrismaClient, env: NodeJS.Pr
       check(`${kind.toLowerCase()} ${allowed ? "opens" : "is sent away from"} ${url}`, ok, `${page.status} ${page.path}`);
     }
     check(`${kind.toLowerCase()} can't open the team area`, (await client.page("/admin")).path === "/dashboard");
+    const guide = (await client.page("/guide")).html;
+    const sellsHere = kind !== "CLIENT";
+    check(
+      `${kind.toLowerCase()} guide shows only its own sections`,
+      guide.includes("Selling: from inquiry to payment") === sellsHere &&
+        guide.includes("Buying: getting quotes") === (kind !== "MANUFACTURER") &&
+        guide.includes("Sales counter, patients and prescriptions") === (kind === "RETAILER") &&
+        guide.includes("Your subscription") === sellsHere,
+    );
     const search = await client.json("GET", "/api/admin/businesses?q=a");
     check(`${kind.toLowerCase()} can't search the team's business list`, search.status !== 200 || !Array.isArray(search.data.results), String(search.status));
   }
-  for (const url of ["/admin", "/admin/businesses", "/admin/announcements", "/admin/demo-requests", "/admin/activity"]) {
+  for (const url of ["/admin", "/admin/businesses", "/admin/announcements", "/admin/demo-requests", "/admin/activity", "/admin/guide"]) {
     check(`team opens ${url}`, (await team.page(url)).status === 200);
   }
   check("team is sent from business pages to /admin", (await team.page("/dashboard")).path === "/admin");

@@ -128,7 +128,7 @@ export function heading(html: string) {
 }
 
 /** Raw codes and broken values that should never reach the screen. */
-const RAW = /\b(INQUIRY|QUOTED|ORDERED|PREPARING|DISPATCHED|RECEIVED|DECLINED|CANCELLED|PENDING|DISPENSED|COMPLETED|PREPAY|ON_DELIVERY|CREDIT|WHOLESALER|RETAILER|MANUFACTURER|BANK_TRANSFER|MEDICINE|EQUIPMENT|undefined|null|NaN|Invalid Date)\b/g;
+const RAW = /\b(INQUIRY|QUOTED|ORDERED|PREPARING|DISPATCHED|RECEIVED|DECLINED|CANCELLED|PENDING|DISPENSED|COMPLETED|PREPAY|ON_DELIVERY|CREDIT|WHOLESALER|RETAILER|MANUFACTURER|BANK_TRANSFER|CASH|CARD|INSURANCE|MEDICINE|EQUIPMENT|undefined|null|NaN|Invalid Date)\b/g;
 
 /** Notes wording problems on a page: raw codes, "undefined", and retail words on wholesale screens. */
 export function scanLabels(who: string, url: string, html: string, extraWords: RegExp[] = []) {

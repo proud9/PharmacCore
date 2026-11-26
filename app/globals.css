@@ -110,3 +110,30 @@ label {
     print-color-adjust: exact;
   }
 }
+
+/* Guide animations (components/guide). All of them stop when the visitor prefers less motion. */
+@keyframes guide-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes guide-pop {
+  0% { transform: scale(0.85); opacity: 0.4; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes guide-pulse {
+  0%, 100% { transform: scale(0.92); opacity: 0.9; }
+  50% { transform: scale(1.12); opacity: 0.35; }
+}
+@keyframes guide-dash {
+  to { stroke-dashoffset: -16; }
+}
+.guide-fade { animation: guide-fade 0.4s ease-out; }
+.guide-pop { animation: guide-pop 0.5s ease-out; }
+.guide-pulse { transform-box: fill-box; transform-origin: center; animation: guide-pulse 2.4s ease-in-out infinite; }
+.guide-dash { animation: guide-dash 1.4s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-moving { display: none; }
+  .guide-fade, .guide-pop, .guide-pulse, .guide-dash { animation: none; }
+}

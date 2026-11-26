@@ -4,10 +4,11 @@ import { apiTenant } from "@/lib/tenant";
 import { deductStock } from "@/lib/inventory";
 import { audit } from "@/lib/audit";
 import { ref } from "@/lib/utils";
+import { COUNTER_PAYMENTS } from "@/lib/counter";
 
 const schema = z.object({
   patientId: z.string().optional().nullable(),
-  payment: z.enum(["CASH", "CARD", "MOBILE", "INSURANCE"]).default("CASH"),
+  payment: z.enum(COUNTER_PAYMENTS).default("CASH"),
   discount: z.number().min(0).default(0),
   items: z
     .array(

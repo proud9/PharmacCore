@@ -7,8 +7,9 @@ import { ListFilter, ListSearch } from "@/components/search/ListSearch";
 import { Pagination } from "@/components/Pagination";
 import { paging, searchText, type ListParams } from "@/lib/paging";
 import type { Prisma } from "@prisma/client";
+import { COUNTER_PAYMENTS, counterPaymentLabel } from "@/lib/counter";
 
-const PAYMENTS = ["CASH", "CARD", "MOBILE", "INSURANCE"];
+const PAYMENTS: readonly string[] = COUNTER_PAYMENTS;
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<ListParams> }) {
   const t = await pageTenant("counter");
@@ -52,7 +53,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
           <ListFilter
             param="payment"
             label="Payment"
-            options={[{ value: "", label: "All payments" }, ...PAYMENTS.map((value) => ({ value, label: value }))]}
+            options={[{ value: "", label: "All payments" }, ...PAYMENTS.map((value) => ({ value, label: counterPaymentLabel(value) }))]}
           />
         </div>
         <div className="overflow-x-auto">
@@ -78,7 +79,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                 <td>{format(sale.createdAt, "dd MMM yyyy HH:mm")}</td>
                 <td>{sale.cashierName}</td>
                 <td>{sale.patient ? `${sale.patient.lastName}, ${sale.patient.firstName}` : "Walk-in"}</td>
-                <td>{sale.payment}</td>
+                <td>{counterPaymentLabel(sale.payment)}</td>
                 <td>{money(sale.total, currency)}</td>
               </tr>
             ))}

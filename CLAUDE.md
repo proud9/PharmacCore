@@ -56,6 +56,7 @@ npm run build && npm start
 npm test             # end-to-end on throwaway Postgres databases (add -- --build after code changes)
 npm run demo         # LAN demo on database parallax_demo (-- --reset empty, -- --seed demo data)
 npx tsx scripts/test/rls-check.ts   # database-level isolation checks against your own database
+npx tsx scripts/guide-shots.ts      # re-take the guide screenshots (public/guide) from a seeded copy
 ```
 
 Env (`.env`, see `.env.example`): `DIRECT_URL` (database owner: schema and RLS only), `DATABASE_URL` (role `parallax_app`, not the owner, so RLS applies), `ADMIN_DATABASE_URL` (role `parallax_admin`, no grants on business tables), `AUTH_SECRET`, `DATA_KEY` (32 bytes base64; back it up), optional `COOKIE_SECURE`. `scripts/db.ts push` creates both roles with the passwords in those URLs. Local Postgres on this Mac: `brew services start postgresql@17`.
@@ -86,7 +87,8 @@ app/
     inventory/, inventory/[id], inventory/deleted/, stock-take/, stock-take/[id]   (wholesalers, retailers)
     pos/, sales/, patients/, prescriptions/, reports/   (retailers)
     audit/, settings/ (business details, bank, logo, terms), notifications/
-  (admin)/admin/          Parallax team: overview, businesses (+[id]), announcements, demo-requests, activity
+    guide/                How Parallax works for this account type (components/guide/BusinessGuide)
+  (admin)/admin/          Parallax team: overview, businesses (+[id]), announcements, demo-requests, activity, guide
   documents/[id]/[kind]   inquiry | quotation | purchase-order | invoice | delivery-note (both parties only)
   documents/sales/[id]    Counter receipt
   api/
@@ -110,6 +112,8 @@ components/
                           ConnectionActions, ContactForm
   documents/              TradeDocument (5 kinds), InvoiceSheet, CompanyMark (logo by org id), DocumentFrame
   inventory/              InventoryTable, IntakeQueue, CatalogItems (item list + OfferedToggle), …
+  guide/                  BusinessGuide (per account type, built from capabilities), TeamGuide, Blocks (sections, Shot, Steps, Note…),
+                          animated NetworkMap, OrderFlow, FlowStrip (useCycle: pause, hover-stop, reduced motion)
   usePost.ts              POST + error + router.refresh()
 lib/
   capabilities.ts         ORG_KINDS, ROLES, ROLE_LABEL, TRADE_PAIRS, can(kind, capability), PAYING_KINDS, homePath (client-safe)
@@ -127,7 +131,8 @@ lib/
   inventory.ts, items.ts, deletion.ts, stocksheet.ts, xlsx.ts, paging.ts, contacts.ts, item-schema.ts, rate-limit.ts
 middleware.ts             Signed in or not; ADMIN confined to /admin, businesses kept out of /admin
 prisma/schema.prisma, rls.sql, seed.ts
-scripts/db.ts (push, envForDatabase), create-admin.ts, demo.ts, prod-build.ts, serve-test.ts, test/
+scripts/db.ts (push, envForDatabase), create-admin.ts, demo.ts, prod-build.ts, serve-test.ts, guide-shots.ts, test/
+public/guide/             Guide screenshots (made by scripts/guide-shots.ts; do not edit by hand)
 ```
 
 ## Domain model
@@ -165,6 +170,7 @@ scripts/db.ts (push, envForDatabase), create-admin.ts, demo.ts, prod-build.ts, s
 - **Pages are server components** using `t.db`. Interactive pieces are `"use client"` components in `components/<feature>/` that `fetch` an API route, then refresh.
 - **API routes**: guard (`apiTenant`/`apiAdmin`) → `zod.safeParse` → 400 with a plain-English `error`; multi-row writes in `t.tx`; then `audit(t, { action: "UPPER_SNAKE", entity, entityId, details })` (team: `platformAudit`). Route files export only HTTP handlers; shared schemas go in `lib/`.
 - Every state-changing action writes an audit entry.
+- **Guides** (`/guide`, `/admin/guide`) describe each account type's screens and steps with real button names. When you change a flow, a pictured screen or a rule the guide states (terms, retention, trial and grace days come from the constants), update `components/guide/*` and re-run `npx tsx scripts/guide-shots.ts` (seeds `parallax_test_guide`, serves port 3300, captures with headless Chrome at 2×).
 - References come from `ref(prefix)` (`INQ`, `QT`, `PO`, `INV`, `DN`, `RX`, `ST`). Money via `money()`. Dates `format(d, "dd MMM yyyy")`.
 - Stock leaves via `deductStock(tx, productId, qty)` (earliest expiry first) inside `t.tx`. Never write a quantity onto Product.
 - Imports use the `@/` alias. Use `cn()` for conditional classes.

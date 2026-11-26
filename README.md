@@ -112,4 +112,6 @@ Each suite runs on its own throwaway Postgres database (`parallax_test_workflow`
 
 `npx tsx scripts/test/rls-check.ts` runs only the database-level checks against your own database.
 
-Drop `--build` when the code hasn't changed since the last build. To look around the installation the workflow test built, run `npx tsx scripts/serve-test.ts` (port 3200).
+Drop `--build` when the code hasn't changed since the last build.
+
+Each account has a **Guide** page (`/guide`, and `/admin/guide` for the team) with screenshots of the real screens. After changing a pictured screen, re-take them with `npx tsx scripts/guide-shots.ts` (needs Google Chrome; it uses its own throwaway database on port 3300). To look around the installation the workflow test built, run `npx tsx scripts/serve-test.ts` (port 3200).

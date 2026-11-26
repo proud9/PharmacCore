@@ -14,6 +14,7 @@ import {
   Truck,
   Users,
   BarChart3,
+  BookOpen,
   ScrollText,
   Building2,
   Bell,
@@ -47,6 +48,7 @@ const PRESCRIPTIONS: NavItem = { href: "/prescriptions", label: "Prescriptions",
 const REPORTS: NavItem = { href: "/reports", label: "Reports", icon: BarChart3, cap: "counter" };
 const AUDIT: NavItem = { href: "/audit", label: "Activity log", icon: ScrollText };
 const COMPANY: NavItem = { href: "/settings", label: "Business details", icon: Settings };
+const GUIDE: NavItem = { href: "/guide", label: "Guide", icon: BookOpen };
 
 /** The sidebar, filtered by what this business can do. Page and API guards (lib/tenant.ts) enforce it. */
 const NAV: NavItem[] = [
@@ -67,6 +69,7 @@ const NAV: NavItem[] = [
   REPORTS,
   AUDIT,
   COMPANY,
+  GUIDE,
 ];
 
 function navFor(caps: Capability[]) {

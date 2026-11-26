@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Building2, Inbox, LayoutDashboard, LogOut, Megaphone, ScrollText } from "lucide-react";
+import { BookOpen, Building2, Inbox, LayoutDashboard, LogOut, Megaphone, ScrollText } from "lucide-react";
 import { SidebarLayout } from "@/components/SidebarLayout";
 
 const NAV = [
@@ -10,6 +10,7 @@ const NAV = [
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
   { href: "/admin/demo-requests", label: "Demo requests", icon: Inbox },
   { href: "/admin/activity", label: "Team activity", icon: ScrollText },
+  { href: "/admin/guide", label: "Guide", icon: BookOpen },
 ];
 
 /** The Parallax team's frame. No business data is reachable from here. */

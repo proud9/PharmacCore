@@ -96,6 +96,12 @@ Badge tone meaning: **good** = done or healthy (delivered, dispensed, completed)
 - Same tokens as the app, no other colors: section bars `bg-pine-800` with white text, headings `text-pine-900`, body `text-ink`, small labels `text-foil`, borders `border-rule`, tints `bg-shelf`. Print keeps these colors (`print-color-adjust: exact` in `globals.css`) on a white page.
 - The issuing business's logo and details head the page (`CompanyMark`). Never print the other side's private notes.
 
+## Guides and motion
+
+- The in-app guides (`components/guide`) use the same panels and tokens: numbered section panels, `Shot` (a real screenshot in a light browser frame, caption below), `Steps`, `Note` (tip = dispensary tint, watch = brass), `MenuList`, `Compare`, `Faq`.
+- Motion lives only in the guides' diagrams (`NetworkMap`, `OrderFlow`, `FlowStrip`): it explains a process, never decorates. Every animation can be paused, stops on hover, and is off under `prefers-reduced-motion` (classes `guide-*` in `globals.css`). App screens themselves stay still.
+- Screenshots come from `scripts/guide-shots.ts`, never hand-edited images.
+
 ## Each side's view
 
 Parallax shows one order differently to each party. Seller and buyer read their own status words (`SELLER_LABEL` / `BUYER_LABEL`: "Inquiry received" vs "Inquiry sent"), and a page never shows the other business's private notes, costs, stock or item ids. A buyer browsing a supplier sees item names only, never prices.

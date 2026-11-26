@@ -303,7 +303,7 @@ export function DispatchForm({ orderId, lines, stockNote }: { orderId: string; l
       <form onSubmit={onSubmit} className="space-y-3">
         {lines.map((line) => (
           <div key={line.id} className="grid grid-cols-[1fr_110px] items-end gap-2">
-            <label className="pb-2 text-sm">
+            <label className="pb-2 text-sm font-medium normal-case tracking-normal text-ink">
               {lineLabel(line)} · ordered {line.quantity}
             </label>
             <input name={`qty-${line.id}`} type="number" min={0} max={line.quantity} defaultValue={line.quantity} aria-label={`Quantity sent: ${line.name}`} />
@@ -362,7 +362,7 @@ export function ReceiveForm({ orderId, lines, toInventory, onBehalf }: { orderId
       <form onSubmit={onSubmit} className="space-y-3">
         {lines.map((line) => (
           <div key={line.id} className="grid grid-cols-[1fr_110px] items-end gap-2">
-            <label className="pb-2 text-sm">
+            <label className="pb-2 text-sm font-medium normal-case tracking-normal text-ink">
               {lineLabel(line)} · sent {line.qtyDispatched ?? line.quantity}
             </label>
             <input
