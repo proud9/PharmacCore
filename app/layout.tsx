@@ -15,9 +15,9 @@ const sans = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "Parallax | Medical wholesale, kept in order",
+  title: "Parallax | Medicine supply, kept in order",
   description:
-    "Parallax runs your medical wholesale: stock in from manufacturers, orders in from pharmacies, hospitals and clinics, and every batch out of the warehouse on time.",
+    "The trading network for medicine supply in Zambia: manufacturers, wholesalers, pharmacies, hospitals, clinics, schools and NGOs ask for quotes, place orders and keep stock, each in a private account.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

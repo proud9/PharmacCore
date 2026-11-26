@@ -84,13 +84,13 @@ export function DemoRequestDialog() {
           </>
         ) : (
           <form onSubmit={onSubmit}>
-            <p className={styles.demoIntro}>Tell us about your wholesale and we&apos;ll arrange a time to show you Parallax.</p>
+            <p className={styles.demoIntro}>Tell us about your business and we&apos;ll arrange a time to show you Parallax.</p>
             <div className={styles.field}>
               <label htmlFor="d-name">Your name</label>
               <input id="d-name" name="name" required minLength={2} maxLength={100} autoComplete="name" />
             </div>
             <div className={styles.field}>
-              <label htmlFor="d-company">Wholesale name</label>
+              <label htmlFor="d-company">Business name</label>
               <input id="d-company" name="company" required minLength={2} maxLength={150} autoComplete="organization" />
             </div>
             <div className={styles.two}>
@@ -107,7 +107,7 @@ export function DemoRequestDialog() {
               <label htmlFor="d-notes">
                 Anything we should know? <span className={styles.opt}>Optional</span>
               </label>
-              <textarea id="d-notes" name="notes" rows={3} maxLength={1000} placeholder="e.g. 2 warehouses, about 1,200 products" />
+              <textarea id="d-notes" name="notes" rows={3} maxLength={1000} placeholder="e.g. a wholesaler with 2 warehouses and about 1,200 items" />
             </div>
             <div className={styles.honeypot} aria-hidden="true">
               <label htmlFor="d-website">Website</label>

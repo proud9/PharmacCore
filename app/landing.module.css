@@ -105,6 +105,9 @@
 
 /* Supply chain: three stages joined by labelled arrows; the wholesale (you) is the centre */
 .chain { display: grid; grid-template-columns: 1fr 104px 1fr 104px 1fr; align-items: stretch; }
+.chain4 { grid-template-columns: 1fr 88px 1fr 88px 1fr 88px 1fr; }
+.chain4 .stage h3 { font-size: 19px; }
+.chain4 .stage p { font-size: 16px; }
 .stage { border-top: 1px solid var(--pine); padding: 28px 4px 0 0; }
 .you { background: var(--white); border-top: 3px solid var(--green); border-radius: 0 0 16px 16px; padding: 26px 24px 28px; box-shadow: 0 24px 40px -32px rgba(15, 61, 55, 0.35); }
 .stage .icon { color: var(--green); width: 28px; height: 28px; }
@@ -193,7 +196,7 @@
   .navLinks { display: none; }
   .heroGrid, .head, .accountGrid { grid-template-columns: 1fr; gap: 48px; }
   .hero h1 { max-width: 12ch; }
-  .chain { grid-template-columns: 1fr; }
+  .chain, .chain4 { grid-template-columns: 1fr; }
   .stage { padding: 24px 0 8px; }
   .you { padding: 24px; }
   .link { flex-direction: row; justify-content: flex-start; gap: 14px; padding: 18px 0 18px 4px; }

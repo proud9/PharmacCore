@@ -1,29 +1,30 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import {
   CalendarClock,
-  ClipboardCheck,
+  ContactRound,
   Facebook,
   Factory,
-  FileSpreadsheet,
   Globe,
   HandCoins,
   History,
   Hospital,
   Instagram,
   Linkedin,
+  ListChecks,
   LockKeyhole,
   Mail,
   MapPin,
   MonitorSmartphone,
+  Network,
   Phone,
+  Pill,
   Printer,
+  School,
   Stethoscope,
   Store,
-  UsersRound,
   Warehouse,
   ArrowRight,
-  Building2,
-  Landmark,
   type LucideIcon,
 } from "lucide-react";
 import AccountForm from "@/components/auth/AccountForm";
@@ -36,29 +37,34 @@ import { CONTACT, SOCIAL_LINKS } from "@/lib/contact";
 import styles from "./landing.module.css";
 
 const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
-  { icon: Factory, title: "Purchase orders", text: "Order from manufacturers and suppliers, then receive each delivery against its delivery note." },
-  { icon: CalendarClock, title: "Batches and expiry dates", text: "Every lot number and expiry date in the warehouse. Stock always leaves earliest-expiry first." },
-  { icon: HandCoins, title: "Customer orders and pricing", text: "Price incoming orders in Kwacha and set a ready date. Customers accept online." },
-  { icon: Printer, title: "Invoices and delivery notes", text: "Created from the order itself, ready to print or save as PDF." },
-  { icon: ClipboardCheck, title: "Stock takes", text: "Count the warehouse; quantities moved and their value are worked out for you." },
-  { icon: UsersRound, title: "Customer accounts", text: "Each pharmacy, hospital or clinic gets its own login and sees only its own orders." },
-  { icon: FileSpreadsheet, title: "Excel import", text: "Bring in your existing stock sheet with one upload." },
-  { icon: History, title: "Activity log", text: "Every order, price change and stock correction, with who made it and why." },
+  { icon: LockKeyhole, title: "Prices kept private", text: "A quote is seen by the one buyer it was sent to. No other business sees your prices, stock or documents." },
+  { icon: Network, title: "Connections", text: "Find manufacturers, wholesalers, pharmacies and clients in the directory and ask to connect." },
+  { icon: ListChecks, title: "Item lists without prices", text: "Connected buyers see what you offer by name only, tick what they need and send an inquiry." },
+  { icon: Printer, title: "Quotes, orders, invoices, delivery notes", text: "Made from the order itself, with your logo and bank details, ready to print or save as PDF." },
+  { icon: CalendarClock, title: "Batches and expiry dates", text: "Wholesalers and pharmacies keep every batch and expiry. Stock leaves earliest-expiry first." },
+  { icon: Pill, title: "Sales counter", text: "Pharmacies sell at the counter and keep patients and prescriptions in the same account." },
+  { icon: ContactRound, title: "Customers not on Parallax", text: "Keep a private list of the businesses you deal with offline and still make their documents." },
+  { icon: History, title: "Stock takes and activity log", text: "Count stock, see what moved and its value, and see who changed what and when." },
 ];
 
 const STEPS = [
-  { title: "Request", text: "A pharmacy, hospital or clinic lists the medicines and quantities it needs.", party: "Customer" },
-  { title: "Price", text: "You send a Kwacha price and a ready date.", party: "You" },
-  { title: "Accept", text: "The customer accepts your price online.", party: "Customer" },
-  { title: "Dispatch", text: "You pick the stock, earliest expiry first, and issue the delivery note.", party: "You" },
-  { title: "Delivered", text: "The order arrives, with its invoice and delivery note on file for both of you.", party: "Both" },
+  { title: "Connect", text: "Find a supplier in the directory and ask to connect. Once they accept, you see their item list.", party: "Both" },
+  { title: "Inquiry", text: "Tick the items and quantities you need from the list and send the inquiry.", party: "Buyer" },
+  { title: "Quote", text: "The supplier prices each line in Kwacha. Only you see that quote.", party: "Seller" },
+  { title: "Order", text: "Accept the quote and your purchase order goes with it.", party: "Buyer" },
+  { title: "Deliver and pay", text: "Invoice and delivery note follow your payment terms. Stock you receive goes into your inventory.", party: "Both" },
 ];
 
+const STAGES: { icons: LucideIcon[]; title: string; text: string; link?: { label: string; detail: string } }[] = [
+  { icons: [Factory], title: "Manufacturers", text: "Offer your item list to wholesalers, quote their inquiries and invoice each delivery.", link: { label: "Sell to", detail: "Wholesalers" } },
+  { icons: [Warehouse], title: "Wholesalers", text: "Buy from manufacturers, keep every batch in stock, and supply pharmacies and clients.", link: { label: "Sell to", detail: "Pharmacies, clients" } },
+  { icons: [Store], title: "Pharmacies", text: "Order from your wholesalers, run the sales counter, and supply clinics and hospitals.", link: { label: "Sell to", detail: "Clients" } },
+  { icons: [Hospital, Stethoscope, School], title: "Hospitals, clinics, schools and NGOs", text: "Ask several suppliers for quotes, accept the best and follow each delivery. Free of charge." },
+];
 
 export default async function Home() {
   // requireUser checks the account still exists and is active, not just the cookie.
   const session = await requireUser();
-  const setUp = true;
   const year = new Date().getFullYear();
   const createHref = "#create-account";
 
@@ -96,8 +102,8 @@ export default async function Home() {
             <div>
               <h1>Medicine supply, kept in order.</h1>
               <p className={styles.lead}>
-                Parallax runs your medical wholesale: stock in from manufacturers, orders in from pharmacies, hospitals
-                and clinics, and every batch out of the warehouse on time.
+                Parallax connects manufacturers, wholesalers, pharmacies and the hospitals, clinics, schools and NGOs they
+                supply. Ask for quotes, place orders and keep stock, each business in its own private account.
               </p>
               <div className={styles.heroActions}>
                 <a className={`${styles.btn} ${styles.btnPrimary}`} href={createHref}>
@@ -115,31 +121,27 @@ export default async function Home() {
         <section className={`${styles.band} ${styles.alt}`} id="supply-chain">
           <div className={styles.wrap}>
             <div className={styles.head}>
-              <h2>Between the manufacturer and the ward.</h2>
-              <p>Your wholesale sits in the middle of the supply chain. Parallax connects you to both ends of it.</p>
+              <h2>From the manufacturer to the ward.</h2>
+              <p>
+                Every business on the chain has its own account. Connect with the businesses you buy from and sell to,
+                and trade with them the way you would door to door, only on Parallax.
+              </p>
             </div>
-            <div className={styles.chain}>
-              <article className={styles.stage}>
-                <Factory className={styles.icon} aria-hidden="true" />
-                <h3>Manufacturers and suppliers</h3>
-                <p>Raise purchase orders, then receive each delivery against its delivery note, batch by batch.</p>
-              </article>
-              <ChainLink label="Stock in" detail="Purchase orders" />
-              <article className={`${styles.stage} ${styles.you}`}>
-                <Warehouse className={styles.icon} aria-hidden="true" />
-                <h3>Your wholesale</h3>
-                <p>Every batch and expiry date in your warehouse, every customer order and every invoice, in one place.</p>
-              </article>
-              <ChainLink label="Orders out" detail="Dispatch and delivery" />
-              <article className={styles.stage}>
-                <span className={styles.icons}>
-                  <Store className={styles.icon} aria-hidden="true" />
-                  <Hospital className={styles.icon} aria-hidden="true" />
-                  <Stethoscope className={styles.icon} aria-hidden="true" />
-                </span>
-                <h3>Pharmacies, hospitals and clinics</h3>
-                <p>Your bulk customers order online, accept your prices and follow each delivery to their door.</p>
-              </article>
+            <div className={`${styles.chain} ${styles.chain4}`}>
+              {STAGES.map((stage) => (
+                <Fragment key={stage.title}>
+                  <article className={styles.stage}>
+                    <span className={styles.icons}>
+                      {stage.icons.map((Icon, index) => (
+                        <Icon key={index} className={styles.icon} aria-hidden="true" />
+                      ))}
+                    </span>
+                    <h3>{stage.title}</h3>
+                    <p>{stage.text}</p>
+                  </article>
+                  {stage.link ? <ChainLink label={stage.link.label} detail={stage.link.detail} /> : null}
+                </Fragment>
+              ))}
             </div>
           </div>
         </section>
@@ -147,9 +149,9 @@ export default async function Home() {
         <section className={styles.band} id="how">
           <div className={styles.wrap}>
             <div className={styles.head}>
-              <h2>How a customer order moves.</h2>
+              <h2>How an order moves.</h2>
               <p>
-                Your customers see the same order, price and status as you do, so they stop phoning to ask where their
+                Both businesses see the same order, each from its own side, so nobody phones to ask where a quote or a
                 delivery is.
               </p>
             </div>
@@ -168,8 +170,8 @@ export default async function Home() {
         <section className={`${styles.band} ${styles.alt}`} id="included">
           <div className={styles.wrap}>
             <div className={styles.head}>
-              <h2>Everything a medical wholesale runs on.</h2>
-              <p>From the delivery arriving from the manufacturer to the order leaving for the ward.</p>
+              <h2>What each business gets.</h2>
+              <p>Each account type sees the tools it needs: trading for everyone, stock for wholesalers and pharmacies.</p>
             </div>
             <dl className={styles.features}>
               {FEATURES.map(({ icon: Icon, title, text }) => (
@@ -186,72 +188,36 @@ export default async function Home() {
         <section className={styles.band} id="account">
           <span id="sign-in" className={styles.anchor} aria-hidden="true" />
           <span id="create-account" className={styles.anchor} aria-hidden="true" />
-          {setUp ? (
-            <div className={`${styles.wrap} ${styles.accountGrid}`}>
-              <div className={styles.accountCopy}>
-                <h2>Order from your wholesaler online.</h2>
-                <p className={styles.intro}>
-                  Pharmacies, hospitals and clinics: create a customer account to place orders, accept prices and follow
-                  deliveries.
-                </p>
-                <ul className={styles.points}>
-                  <li>
-                    <MonitorSmartphone className={styles.icon} aria-hidden="true" />
-                    <span>Nothing to install. Parallax runs in your browser, on a computer or phone.</span>
-                  </li>
-                  <li>
-                    <LockKeyhole className={styles.icon} aria-hidden="true" />
-                    <span>Your orders and documents are visible only to you and your wholesaler.</span>
-                  </li>
-                  <li>
-                    <Warehouse className={styles.icon} aria-hidden="true" />
-                    <span>
-                      Running a wholesale?{" "}
-                      <button type="button" className={styles.inlineLink} data-demo>
-                        Request a demo
-                      </button>{" "}
-                      to see Parallax with your own stock.
-                    </span>
-                  </li>
-                </ul>
-              </div>
-              <AccountForm allowRegistration initialMode="register" />
+          <div className={`${styles.wrap} ${styles.accountGrid}`}>
+            <div className={styles.accountCopy}>
+              <h2>Create your business account.</h2>
+              <p className={styles.intro}>
+                Manufacturers, wholesalers, pharmacies, hospitals, clinics, schools and NGOs sign up here. One login per
+                business.
+              </p>
+              <ul className={styles.points}>
+                <li>
+                  <MonitorSmartphone className={styles.icon} aria-hidden="true" />
+                  <span>Nothing to install. Parallax runs in your browser, on a computer or phone, from anywhere.</span>
+                </li>
+                <li>
+                  <LockKeyhole className={styles.icon} aria-hidden="true" />
+                  <span>
+                    Your prices, stock and documents are yours alone. Bank details, private contacts and patient records
+                    are stored encrypted.
+                  </span>
+                </li>
+                <li>
+                  <HandCoins className={styles.icon} aria-hidden="true" />
+                  <span>
+                    Free for hospitals, clinics, schools and NGOs. Manufacturers, wholesalers and pharmacies start with a
+                    30-day free trial.
+                  </span>
+                </li>
+              </ul>
             </div>
-          ) : (
-            <div className={`${styles.wrap} ${styles.accountGrid}`}>
-              <div className={styles.accountCopy}>
-                <h2>Set up your wholesale.</h2>
-                <p className={styles.intro}>
-                  Four short steps: your owner account, company details, logo and bank details. Your documents are ready
-                  to send as soon as you finish.
-                </p>
-                <ul className={styles.points}>
-                  <li>
-                    <Building2 className={styles.icon} aria-hidden="true" />
-                    <span>Company details go straight onto your quotations, invoices and delivery notes.</span>
-                  </li>
-                  <li>
-                    <Landmark className={styles.icon} aria-hidden="true" />
-                    <span>Bank details print on invoices so customers can pay you. Parallax never takes money out.</span>
-                  </li>
-                  <li>
-                    <UsersRound className={styles.icon} aria-hidden="true" />
-                    <span>Once you&apos;re set up, your pharmacies, hospitals and clinics can create accounts to order from you.</span>
-                  </li>
-                </ul>
-              </div>
-              <div className={styles.setupCard}>
-                <h3>Ready when you are</h3>
-                <p>It takes about five minutes. You can add the logo and bank details later if you don&apos;t have them to hand.</p>
-                <Link className={`${styles.btn} ${styles.btnPrimary}`} href="/signup">
-                  Set up your wholesale
-                </Link>
-                <p className={styles.setupAlt}>
-                  Already set up? <Link href="/login">Sign in</Link>
-                </p>
-              </div>
-            </div>
-          )}
+            <AccountForm allowRegistration initialMode="register" />
+          </div>
         </section>
       </main>
 
@@ -259,8 +225,8 @@ export default async function Home() {
         <div className={styles.wrap}>
           <div className={styles.demoBanner}>
             <div>
-              <h2>Setting up a wholesale? See Parallax with your own stock.</h2>
-              <p>We&apos;ll walk your team through orders, batches and dispatch, and help you bring your stock sheet across.</p>
+              <h2>Bringing your business onto Parallax? See it with your own items.</h2>
+              <p>We&apos;ll walk you through connections, quotes, orders and stock, and help you bring your stock sheet across.</p>
             </div>
             <button type="button" className={`${styles.btn} ${styles.btnLight}`} data-demo>
               Request a demo
@@ -273,7 +239,7 @@ export default async function Home() {
                 <img className={styles.logo} src="/brand/parallax-logo-96.png" alt="" width={38} height={38} />
                 Parallax
               </Link>
-              <p>Inventory, ordering and dispatch for medical wholesalers in Zambia.</p>
+              <p>The trading network for medicine supply in Zambia.</p>
             </div>
             <div>
               <h3>Contact</h3>

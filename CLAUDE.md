@@ -103,6 +103,7 @@ app/
     admin/businesses (+[id], [id]/status, [id]/subscription), admin/users/[id], admin/announcements
     demo-requests (PUBLIC), demo-requests/[id]/contacted (team)
 components/
+  SidebarLayout.tsx       Collapsible dark sidebar shared by Shell and AdminShell (icons fixed, labels fade)
   Shell.tsx               Business sidebar/header: nav filtered by capability, notification bell, subscription notice
   admin/                  AdminShell, CreateBusinessForm, BusinessForms, AnnouncementForm
   trade/                  OrdersList, OrderDetail, OrderForms (step forms), OrderBuilder, NewOrderPage, PartnersPage,
@@ -172,12 +173,11 @@ scripts/db.ts (push, envForDatabase), create-admin.ts, demo.ts, prod-build.ts, s
 
 ## Landing page and brand
 
-- `app/page.tsx` is the public marketing page (signed-in visitors see "Open Parallax"). Its copy still speaks mostly to wholesalers; sign-up (`/signup`, AccountForm register mode) creates any of the four business types. "Request a demo" stores a `DemoRequest` for the team.
-- Company contact details are placeholders (`CONTACT` in `lib/contact.ts`). `/terms` and `/privacy` are starter texts: have them legally reviewed before launch and update them when the data kept changes (they predate the multi-business model).
+- `app/page.tsx` is the public marketing page (signed-in visitors see "Open Parallax"). It speaks to all four business types (supply chain, order steps, features per type); sign-up (`/signup`, or AccountForm in register mode on the landing page) creates any of them. "Request a demo" stores a `DemoRequest` for the team.
+- Company contact details are placeholders (`CONTACT` in `lib/contact.ts`). `/terms` and `/privacy` are starter texts written from how the network works and what it stores (they read `TRIAL_DAYS`, `GRACE_DAYS`, `DELETE_RETENTION_DAYS`): have them legally reviewed before launch, and update them whenever `ENCRYPTED_FIELDS`, what is stored, or who can see it changes.
 - Logo files live in `public/brand/`. Business logos are uploaded per organisation to `data/branding/<orgId>/` and served by `/api/company/logo?org=`.
 
 ## Known issues
 
-- Landing page, terms and privacy copy still describe one wholesale per installation in places.
 - Reports cover the retail counter only; there is no trade report yet.
 - The sign-in rate limit is in memory (one server process).

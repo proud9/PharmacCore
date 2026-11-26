@@ -32,8 +32,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <div>
           <h1 className="mt-4 max-w-md font-display text-3xl leading-tight sm:text-4xl">Medicine supply, kept in order.</h1>
           <p className="mt-4 max-w-md text-sage-300">
-            Inventory, ordering and dispatch for medical wholesalers, and online ordering for the pharmacies,
-            hospitals and clinics they supply.
+            Manufacturers, wholesalers, pharmacies and the hospitals, clinics, schools and NGOs they supply, trading
+            with each other from their own private accounts.
           </p>
         </div>
         <p className="text-sm text-sage-300">&nbsp;</p>
